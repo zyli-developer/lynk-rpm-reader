@@ -6,7 +6,7 @@
   [![Android CI](https://img.shields.io/github/actions/workflow/status/zyli-developer/lynk-rpm-reader/android.yml?branch=main&style=flat-square&label=build)](https://github.com/zyli-developer/lynk-rpm-reader/actions/workflows/android.yml)
   [![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](LICENSE)
   ![Android](https://img.shields.io/badge/Android-9%2B-3DDC84?style=flat-square&logo=android&logoColor=white)
-  ![Java](https://img.shields.io/badge/Java-17-ED8B00?style=flat-square&logo=openjdk&logoColor=white)
+  ![JDK](https://img.shields.io/badge/JDK-17-ED8B00?style=flat-square&logo=openjdk&logoColor=white)
 </div>
 
 > [!IMPORTANT]
@@ -15,6 +15,8 @@
 ## 🚗 项目简介
 
 LynkRPMReader 在车机横屏上实时显示发动机转速，并提供启动扫表动画。应用优先读取兼容车机提供的本地 APVP 信号，在不可用时依次尝试标准 Android Car API 和可选的 Root Car API 通道。
+
+当前源码包名为 `com.lynk.rpmreader`，版本为 `1.7.3`（`versionCode 14`）。
 
 本项目为非官方社区项目，与领克、吉利、魅族及其关联公司无隶属、授权或背书关系。品牌及产品名称仅用于如实说明已验证的设备兼容性。
 
@@ -48,13 +50,33 @@ LynkRPMReader 在车机横屏上实时显示发动机转速，并提供启动扫
 
 - Android 9（API 28）或更高版本
 - 兼容的车机本地服务或 Android Automotive 车辆属性权限
-- Root 后备通道需要设备已 Root，并由用户主动授予权限
+- 可选 Root 后备通道只会连接 `127.0.0.1:38605` 上的本机辅助服务；APK 不会自动申请 Root 权限或启动该服务
 
 普通 Android 手机可以安装和启动，但通常没有车辆数据服务，因此不会显示真实转速。请勿在驾驶过程中安装、调试或操作本应用。
 
 ## 🛠️ 构建与测试
 
-需要 JDK 17 和 Android SDK 34。
+需要 JDK 17 和包含 Android 34 平台的 Android SDK。项目源码兼容级别为 Java 8，JDK 17 用于运行当前 Android Gradle Plugin。
+
+构建前需让 Gradle 能够找到 Android SDK。可以通过 Android Studio 生成仓库根目录下的 `local.properties`，也可以在当前终端设置 `ANDROID_HOME`。
+
+Windows PowerShell 的常见配置：
+
+```powershell
+$env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
+```
+
+Linux 的常见配置：
+
+```bash
+export ANDROID_HOME="$HOME/Android/Sdk"
+```
+
+macOS 的常见配置：
+
+```bash
+export ANDROID_HOME="$HOME/Library/Android/sdk"
+```
 
 Windows：
 
@@ -89,10 +111,10 @@ APVP 兼容层仅连接车机本机回环地址，不连接互联网。实现中
 - 应用只读取发动机转速及其状态，不发送车辆控制指令。
 - 不采集 VIN、位置、音视频、账号或其他车辆控制数据。
 - 转速只在设备内存和系统日志中处理，不上传到外部服务器。
-- `INTERNET` 权限只用于连接车机本机回环地址上的 APVP 服务。
+- `INTERNET` 权限只用于连接车机本机回环地址上的 APVP 服务（`localhost:40005/40007`）和可选 Root 辅助服务（`127.0.0.1:38605`）。
 - 只能在本人所有或获得明确授权的车辆与车机上使用，不得绕过访问控制或获取无权访问的数据。
 - 车机固件升级后，本地接口可能发生变化。
-- Root 会扩大应用权限范围；不了解风险时请勿启用。
+- Root 辅助服务以更高权限运行，会扩大整体安全风险面；不了解风险时请勿启用。
 - 不保证兼容所有车型、地区版本或车机固件。
 - 仓库只包含项目原创代码及按各自许可证使用的第三方依赖，不包含无权分发的第三方内容。
 
