@@ -7,6 +7,8 @@
   [![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](LICENSE)
   ![Android](https://img.shields.io/badge/Android-9%2B-3DDC84?style=flat-square&logo=android&logoColor=white)
   ![JDK](https://img.shields.io/badge/JDK-17-ED8B00?style=flat-square&logo=openjdk&logoColor=white)
+
+  [简体中文](README.md) | [English](README_EN.md)
 </div>
 
 > [!IMPORTANT]
