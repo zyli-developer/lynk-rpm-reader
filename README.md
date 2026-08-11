@@ -18,6 +18,13 @@ LynkRPMReader 在车机横屏上实时显示发动机转速，并提供启动扫
 
 本项目为非官方社区项目，与领克、吉利、魅族及其关联公司无隶属、授权或背书关系。品牌及产品名称仅用于如实说明已验证的设备兼容性。
 
+## 🖼️ 应用界面
+
+<div align="center">
+  <img src="docs/assets/lynk-rpm-reader-screenshot.png" width="100%" alt="LynkRPMReader 实际车机运行界面">
+  <p><sub>LynkRPMReader 实际车机运行界面</sub></p>
+</div>
+
 ## ✅ 已验证兼容性
 
 | 车型 | 年款 | 车机系统 | 验证状态 |
