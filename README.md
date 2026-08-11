@@ -9,6 +9,8 @@
   ![JDK](https://img.shields.io/badge/JDK-17-ED8B00?style=flat-square&logo=openjdk&logoColor=white)
 
   [简体中文](README.md) | [English](README_EN.md)
+
+  <p>⭐ 如果这个项目对你有帮助，欢迎点击右上角的 <strong>Star</strong>，支持项目持续维护与改进！</p>
 </div>
 
 > [!IMPORTANT]
