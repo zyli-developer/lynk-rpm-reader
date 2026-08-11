@@ -1,4 +1,4 @@
-package io.github.zylideveloper.rpmreader;
+package com.lynkrpmreader;
 
 import android.os.Process;
 import android.util.Log;

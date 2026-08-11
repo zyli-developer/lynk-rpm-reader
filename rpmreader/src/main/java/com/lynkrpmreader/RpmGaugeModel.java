@@ -1,4 +1,4 @@
-package io.github.zylideveloper.rpmreader;
+package com.lynkrpmreader;
 
 import java.util.Locale;
 

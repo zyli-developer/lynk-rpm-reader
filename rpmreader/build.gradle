@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace 'io.github.zylideveloper.rpmreader'
+    namespace 'com.lynkrpmreader'
     compileSdk 34
 
     defaultConfig {
-        applicationId 'io.github.zylideveloper.rpmreader'
+        applicationId 'com.lynkrpmreader'
         minSdk 28
         targetSdk 34
         versionCode 13
@@ -43,12 +43,12 @@ def rpmLogicTestClasses = layout.buildDirectory.dir('rpm-logic-test/classes')
 
 tasks.register('compileRpmLogicTest', JavaCompile) {
     source = files(
-            'src/main/java/io/github/zylideveloper/rpmreader/ProtoReader.java',
-            'src/main/java/io/github/zylideveloper/rpmreader/ApvpSignalCodec.java',
-            'src/main/java/io/github/zylideveloper/rpmreader/RpmGaugeModel.java',
-            'src/main/java/io/github/zylideveloper/rpmreader/StartupMotion.java',
-            'src/main/java/io/github/zylideveloper/rpmreader/CarRpmValue.java',
-            'src/test/java/io/github/zylideveloper/rpmreader/RpmProtoDecoderTest.java')
+            'src/main/java/com/lynkrpmreader/ProtoReader.java',
+            'src/main/java/com/lynkrpmreader/ApvpSignalCodec.java',
+            'src/main/java/com/lynkrpmreader/RpmGaugeModel.java',
+            'src/main/java/com/lynkrpmreader/StartupMotion.java',
+            'src/main/java/com/lynkrpmreader/CarRpmValue.java',
+            'src/test/java/com/lynkrpmreader/RpmProtoDecoderTest.java')
     classpath = files()
     destinationDirectory = rpmLogicTestClasses
     sourceCompatibility = JavaVersion.VERSION_1_8
@@ -60,5 +60,5 @@ tasks.register('rpmLogicTest', JavaExec) {
     description = 'Runs zero-dependency tests for the RPM protobuf logic.'
     dependsOn 'compileRpmLogicTest'
     classpath = files(rpmLogicTestClasses)
-    mainClass = 'io.github.zylideveloper.rpmreader.RpmProtoDecoderTest'
+    mainClass = 'com.lynkrpmreader.RpmProtoDecoderTest'
 }

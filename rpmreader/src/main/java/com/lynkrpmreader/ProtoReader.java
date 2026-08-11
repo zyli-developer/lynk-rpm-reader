@@ -1,4 +1,4 @@
-package io.github.zylideveloper.rpmreader;
+package com.lynkrpmreader;
 
 import java.io.IOException;
 /** Small protobuf reader for the exact VHAL messages used by the RPM path. */

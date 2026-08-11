@@ -1,4 +1,4 @@
-package io.github.zylideveloper.rpmreader;
+package com.lynkrpmreader;
 
 import android.animation.ValueAnimator;
 import android.animation.Animator;

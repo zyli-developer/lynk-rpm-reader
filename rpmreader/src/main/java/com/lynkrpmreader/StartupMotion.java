@@ -1,4 +1,4 @@
-package io.github.zylideveloper.rpmreader;
+package com.lynkrpmreader;
 
 /** Pure startup-animation timing functions used by rendering and tests. */
 final class StartupMotion {

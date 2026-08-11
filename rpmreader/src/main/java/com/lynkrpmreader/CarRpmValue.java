@@ -1,4 +1,4 @@
-package io.github.zylideveloper.rpmreader;
+package com.lynkrpmreader;
 
 /** Value conversion shared by the Android Car API path and its JVM tests. */
 final class CarRpmValue {
