@@ -21,7 +21,7 @@ LynkRPMReader 在车机横屏上实时显示发动机转速，并提供启动扫
 ## 🖼️ 应用界面
 
 <div align="center">
-  <img src="docs/assets/lynk-rpm-reader-screenshot.png" width="100%" alt="LynkRPMReader 实际车机运行界面">
+  <img src="docs/assets/lynk-rpm-reader-ui-20260811.png" width="100%" alt="LynkRPMReader 实际车机运行界面">
   <p><sub>LynkRPMReader 实际车机运行界面</sub></p>
 </div>
 
