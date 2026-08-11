@@ -1,4 +1,4 @@
-package com.lynkrpmreader;
+package com.lynk.rpmreader;
 
 /** Value conversion shared by the Android Car API path and its JVM tests. */
 final class CarRpmValue {

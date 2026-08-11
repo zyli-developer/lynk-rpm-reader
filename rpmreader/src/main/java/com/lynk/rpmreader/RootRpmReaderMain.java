@@ -1,4 +1,4 @@
-package com.lynkrpmreader;
+package com.lynk.rpmreader;
 
 import android.content.Context;
 import android.os.Looper;
@@ -35,7 +35,7 @@ public final class RootRpmReaderMain {
             Context systemContext = (Context) activityThreadClass.getMethod("getSystemContext")
                     .invoke(activityThread);
             Context context = systemContext.createPackageContext(
-                    "com.lynkrpmreader", Context.CONTEXT_IGNORE_SECURITY);
+                    "com.lynk.rpmreader", Context.CONTEXT_IGNORE_SECURITY);
 
             Class<?> carClass = Class.forName("android.car.Car");
             callbackThread = new HandlerThread("Root-RPM-events");

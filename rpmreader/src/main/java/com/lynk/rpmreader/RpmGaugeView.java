@@ -1,4 +1,4 @@
-package com.lynkrpmreader;
+package com.lynk.rpmreader;
 
 import android.animation.ValueAnimator;
 import android.animation.Animator;

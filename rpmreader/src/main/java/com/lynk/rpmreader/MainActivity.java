@@ -1,4 +1,4 @@
-package com.lynkrpmreader;
+package com.lynk.rpmreader;
 
 import android.app.Activity;
 import android.graphics.Color;

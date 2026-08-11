@@ -1,4 +1,4 @@
-package com.lynkrpmreader;
+package com.lynk.rpmreader;
 
 import android.content.Context;
 import android.util.Log;

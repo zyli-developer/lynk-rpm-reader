@@ -1,4 +1,4 @@
-package com.lynkrpmreader;
+package com.lynk.rpmreader;
 
 import java.io.IOException;
 /** Small protobuf reader for the exact VHAL messages used by the RPM path. */

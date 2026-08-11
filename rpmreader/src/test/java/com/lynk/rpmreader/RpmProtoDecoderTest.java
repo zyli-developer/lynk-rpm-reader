@@ -1,4 +1,4 @@
-package com.lynkrpmreader;
+package com.lynk.rpmreader;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;

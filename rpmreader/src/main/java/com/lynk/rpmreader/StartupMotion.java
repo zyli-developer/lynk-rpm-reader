@@ -1,4 +1,4 @@
-package com.lynkrpmreader;
+package com.lynk.rpmreader;
 
 /** Pure startup-animation timing functions used by rendering and tests. */
 final class StartupMotion {
