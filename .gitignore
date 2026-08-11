@@ -1,0 +1,29 @@
+# Android / Gradle
+.gradle/
+**/build/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Signing and secrets
+*.jks
+*.keystore
+*.p12
+*.pem
+release-signing.properties
+
+# Build artifacts and diagnostics
+*.apk
+*.aab
+*.hprof
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

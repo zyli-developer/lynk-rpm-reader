@@ -1,0 +1,64 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'io.github.zylideveloper.rpmreader'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'io.github.zylideveloper.rpmreader'
+        minSdk 28
+        targetSdk 34
+        versionCode 13
+        versionName '1.7.2'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            debuggable false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    packaging {
+        resources {
+            excludes += ['META-INF/INDEX.LIST', 'META-INF/io.netty.versions.properties']
+        }
+    }
+}
+
+dependencies {
+    implementation platform('io.netty:netty-bom:4.1.136.Final')
+    implementation 'io.grpc:grpc-netty:1.80.0'
+    implementation 'io.grpc:grpc-stub:1.80.0'
+}
+
+def rpmLogicTestClasses = layout.buildDirectory.dir('rpm-logic-test/classes')
+
+tasks.register('compileRpmLogicTest', JavaCompile) {
+    source = files(
+            'src/main/java/io/github/zylideveloper/rpmreader/ProtoReader.java',
+            'src/main/java/io/github/zylideveloper/rpmreader/ApvpSignalCodec.java',
+            'src/main/java/io/github/zylideveloper/rpmreader/RpmGaugeModel.java',
+            'src/main/java/io/github/zylideveloper/rpmreader/StartupMotion.java',
+            'src/main/java/io/github/zylideveloper/rpmreader/CarRpmValue.java',
+            'src/test/java/io/github/zylideveloper/rpmreader/RpmProtoDecoderTest.java')
+    classpath = files()
+    destinationDirectory = rpmLogicTestClasses
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
+}
+
+tasks.register('rpmLogicTest', JavaExec) {
+    group = 'verification'
+    description = 'Runs zero-dependency tests for the RPM protobuf logic.'
+    dependsOn 'compileRpmLogicTest'
+    classpath = files(rpmLogicTestClasses)
+    mainClass = 'io.github.zylideveloper.rpmreader.RpmProtoDecoderTest'
+}
