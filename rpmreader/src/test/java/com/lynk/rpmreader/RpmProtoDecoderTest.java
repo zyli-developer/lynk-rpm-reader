@@ -17,6 +17,8 @@ public final class RpmProtoDecoderTest {
         rejectsInvalidCarApiRpm();
         encodesApvpSignalIdentity();
         decodesApvpUnpackedFloat();
+        acceptsFlymeAuto25SignalIdentity();
+        rejectsUnknownApvpSignalIdentity();
         decodesApvpPackedFloat();
         rejectsApvpResponseWithoutFloat();
         decodesApvpTransferIdsAndConfig();
@@ -25,8 +27,10 @@ public final class RpmProtoDecoderTest {
         usesConfiguredPowerPeakScale();
         mapsEngineCharacteristicZones();
         formatsAnimatedGaugeReadouts();
+        formatsInstrumentReadout();
+        keepsInstrumentLocationExclusive();
         validatesStartupAnimationTimeline();
-        System.out.println("RPM logic tests passed: " + passed + "/13");
+        System.out.println("RPM logic tests passed: " + passed + "/17");
     }
 
     private void convertsCarApiFloatRpm() {
@@ -58,6 +62,30 @@ public final class RpmProtoDecoderTest {
                 fixed32Field(5, Float.floatToIntBits(1666.5f))));
         check(reading.id == 308282774 && "EngNSafeEngN".equals(reading.name), "response identity");
         check(reading.value == 1666.5f && reading.mode == 1, "unpacked Float and mode");
+        pass();
+    }
+
+    private void acceptsFlymeAuto25SignalIdentity() throws Exception {
+        byte[] identify = ApvpSignalCodec.encodeIdentify(
+                ApvpSignalCodec.ENGINE_RPM_ID_FLYME_AUTO_25, ApvpSignalCodec.ENGINE_RPM_NAME);
+        ApvpSignalCodec.Reading reading = ApvpSignalCodec.decodeSignal(concat(
+                bytesField(1, identify), varintField(2, 1),
+                fixed32Field(5, Float.floatToIntBits(1350.0f))));
+        check(ApvpSignalCodec.isEngineRpmReading(reading),
+                "Flyme Auto 2.5 RPM signal identity");
+        check(reading.id == 308282775 && reading.value == 1350.0f,
+                "Flyme Auto 2.5 RPM signal payload");
+        pass();
+    }
+
+    private void rejectsUnknownApvpSignalIdentity() {
+        check(!ApvpSignalCodec.isEngineRpmReading(new ApvpSignalCodec.Reading(
+                        308282776, ApvpSignalCodec.ENGINE_RPM_NAME, 0, 1200.0f)),
+                "unknown APVP signal ID must be rejected");
+        check(!ApvpSignalCodec.isEngineRpmReading(new ApvpSignalCodec.Reading(
+                        ApvpSignalCodec.ENGINE_RPM_ID_FLYME_AUTO_25,
+                        "VehicleSpeed", 0, 1200.0f)),
+                "unexpected APVP signal name must be rejected");
         pass();
     }
 
@@ -119,6 +147,29 @@ public final class RpmProtoDecoderTest {
         check("1.3".equals(RpmGaugeModel.formatThousands(1298f)), "center x1000 readout");
         check("1298 RPM".equals(RpmGaugeModel.formatExact(1298f)), "upper-right exact readout");
         check("8.0".equals(RpmGaugeModel.formatThousands(9000f)), "formatted value clamps");
+        pass();
+    }
+
+    private void formatsInstrumentReadout() {
+        check("1.0 × 1000 RPM".equals(RpmDisplayText.available(1000)),
+                "instrument readout uses one decimal and x1000 unit");
+        check("0.9 × 1000 RPM".equals(RpmDisplayText.available(850)),
+                "instrument readout rounds to one decimal");
+        check("—.- × 1000 RPM".equals(RpmDisplayText.unavailable()),
+                "instrument unavailable placeholder");
+        pass();
+    }
+
+    private void keepsInstrumentLocationExclusive() {
+        check(RpmDisplayLocation.fromPersistedValue("left_speed")
+                        == RpmDisplayLocation.LEFT_SPEED,
+                "left placement restores as the only enum value");
+        check(RpmDisplayLocation.fromPersistedValue("right_card")
+                        == RpmDisplayLocation.RIGHT_CARD,
+                "right placement restores as the only enum value");
+        check(RpmDisplayLocation.fromPersistedValue("left_speed,right_card")
+                        == RpmDisplayLocation.OFF,
+                "combined placement is rejected");
         pass();
     }
 

@@ -20,3 +20,9 @@ jobs:
       - uses: android-actions/setup-android@v3
       - name: Test and build
         run: ./gradlew :rpmreader:rpmLogicTest :rpmreader:assembleDebug --no-daemon
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: LynkRPMReader-debug
+          path: rpmreader/build/outputs/apk/debug/rpmreader-debug.apk
+          if-no-files-found: error

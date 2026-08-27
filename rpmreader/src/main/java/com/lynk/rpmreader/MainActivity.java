@@ -1,19 +1,27 @@
 package com.lynk.rpmreader;
 
 import android.app.Activity;
+import android.app.ActivityOptions;
+import android.content.Intent;
+import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.StateListDrawable;
+import android.hardware.display.DisplayManager;
 import android.os.Bundle;
 import android.text.Spannable;
 import android.text.SpannableString;
 import android.text.style.ForegroundColorSpan;
 import android.text.method.ScrollingMovementMethod;
 import android.view.Gravity;
+import android.view.Display;
 import android.view.View;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
@@ -22,6 +30,11 @@ import java.util.Date;
 import java.util.Locale;
 
 public final class MainActivity extends Activity implements VehicleRpmClient.Listener {
+    private static final String PREFS = "rpm_secondary_display";
+    private static final String PREF_DISPLAY_ID = "display_id";
+    private static final String PREF_DISPLAY_LOCATION = "display_location";
+    private static final String PREF_ACTIVE_DISPLAY_LOCATION = "active_display_location";
+    private static final String EXTRA_START_SECONDARY = "start_secondary";
     private static final int INK = Color.rgb(4, 12, 18);
     private static final int PANEL = Color.rgb(9, 29, 39);
     private static final int MUTED = Color.rgb(126, 151, 164);
@@ -37,6 +50,12 @@ public final class MainActivity extends Activity implements VehicleRpmClient.Lis
     private View statusDot;
     private VehicleRpmClient client;
     private StartupOverlayView startupOverlay;
+    private RadioGroup displayLocationGroup;
+    private RadioButton displayOffButton;
+    private RadioButton displayLeftButton;
+    private RadioButton displayRightButton;
+    private EcarxProjectionClient projectionOperation;
+    private boolean suppressLocationCallback;
     private boolean firstLaunch = true;
     private boolean activityStarted;
 
@@ -44,8 +63,27 @@ public final class MainActivity extends Activity implements VehicleRpmClient.Lis
         super.onCreate(savedInstanceState);
         getWindow().setNavigationBarColor(INK);
         buildUi();
-        appendLog("目标信号：EngNSafeEngN / 0x12600596");
+        appendLog("目标信号：EngNSafeEngN / 0x12600596 / 0x12600597");
         appendLog("等待连接车辆 APVP 数据服务");
+        if (getIntent().getBooleanExtra(EXTRA_START_SECONDARY, false)) {
+            displayLocationGroup.post(() -> {
+                RpmDisplayLocation location = selectedDisplayLocation();
+                if (location.isEnabled()) startSecondaryDisplay(location);
+            });
+        }
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        refreshDisplayLocationControls();
+        displayLocationGroup.post(() -> {
+            RpmDisplayLocation location = selectedDisplayLocation();
+            if (projectionOperation == null
+                    && location.isEnabled()
+                    && activeSecondaryDisplayId() < 0) {
+                startSecondaryDisplay(location);
+            }
+        });
     }
 
     @Override protected void onStart() {
@@ -151,6 +189,39 @@ public final class MainActivity extends Activity implements VehicleRpmClient.Lis
         buttonParams.topMargin = dp(12);
         panel.addView(reconnect, buttonParams);
 
+        TextView locationTitle = label("仪表转速显示位置", 18, MUTED, Typeface.BOLD);
+        locationTitle.setLetterSpacing(0.08f);
+        LinearLayout.LayoutParams locationTitleParams = new LinearLayout.LayoutParams(-1, -2);
+        locationTitleParams.topMargin = dp(10);
+        panel.addView(locationTitle, locationTitleParams);
+
+        displayLocationGroup = new RadioGroup(this);
+        displayLocationGroup.setOrientation(RadioGroup.HORIZONTAL);
+        displayLocationGroup.setGravity(Gravity.CENTER_VERTICAL);
+        displayLocationGroup.setPadding(dp(4), 0, dp(4), 0);
+        GradientDrawable locationBackground = roundRect(PANEL, 12);
+        locationBackground.setStroke(dp(1), ICE);
+        displayLocationGroup.setBackground(locationBackground);
+
+        displayOffButton = locationButton("关闭");
+        displayLeftButton = locationButton("左侧速度区");
+        displayRightButton = locationButton("右侧转速卡片");
+        displayLocationGroup.addView(displayOffButton,
+                new RadioGroup.LayoutParams(0, dp(54), 0.75f));
+        displayLocationGroup.addView(displayLeftButton,
+                new RadioGroup.LayoutParams(0, dp(54), 1.2f));
+        displayLocationGroup.addView(displayRightButton,
+                new RadioGroup.LayoutParams(0, dp(54), 1.45f));
+        displayLocationGroup.setOnCheckedChangeListener((group, checkedId) -> {
+            if (suppressLocationCallback) return;
+            RpmDisplayLocation location = locationForCheckedId(checkedId);
+            selectDisplayLocation(location);
+        });
+        LinearLayout.LayoutParams locationParams = new LinearLayout.LayoutParams(-1, dp(54));
+        locationParams.topMargin = dp(6);
+        panel.addView(displayLocationGroup, locationParams);
+        refreshDisplayLocationControls();
+
         TextView logTitle = label("诊断记录", 20, MUTED, Typeface.BOLD);
         logTitle.setLetterSpacing(0.14f);
         LinearLayout.LayoutParams logTitleParams = new LinearLayout.LayoutParams(-1, -2);
@@ -232,6 +303,29 @@ public final class MainActivity extends Activity implements VehicleRpmClient.Lis
         return view;
     }
 
+    private RadioButton locationButton(String text) {
+        RadioButton button = new RadioButton(this);
+        button.setId(View.generateViewId());
+        button.setText(text);
+        button.setTextSize(16);
+        int[][] states = {
+                new int[]{android.R.attr.state_checked},
+                new int[]{-android.R.attr.state_enabled},
+                new int[]{}
+        };
+        button.setTextColor(new ColorStateList(states, new int[]{
+                INK, Color.rgb(92, 113, 124), Color.rgb(208, 240, 244)
+        }));
+        button.setGravity(Gravity.CENTER);
+        button.setButtonDrawable(null);
+        StateListDrawable background = new StateListDrawable();
+        background.addState(new int[]{android.R.attr.state_checked}, roundRect(ICE, 9));
+        background.addState(new int[]{}, roundRect(Color.TRANSPARENT, 9));
+        button.setBackground(background);
+        button.setPadding(dp(6), 0, dp(6), 0);
+        return button;
+    }
+
     private GradientDrawable roundRect(int color, int radiusDp) {
         GradientDrawable drawable = new GradientDrawable();
         drawable.setColor(color);
@@ -249,6 +343,211 @@ public final class MainActivity extends Activity implements VehicleRpmClient.Lis
             statusView.setTextColor(error ? CORAL : Color.WHITE);
         }
         setDotColor(error ? CORAL : color);
+    }
+
+    private void selectDisplayLocation(RpmDisplayLocation location) {
+        if (projectionOperation != null) {
+            refreshDisplayLocationControls();
+            return;
+        }
+
+        RpmDisplayLocation previous = activeDisplayLocation();
+        persistSelectedDisplayLocation(location);
+        setDisplayLocationControlsEnabled(false);
+
+        int activeId = activeSecondaryDisplayId();
+        if (activeId >= 0 && previous == location) {
+            refreshDisplayLocationControls();
+            return;
+        }
+
+        Runnable activateSelection = () -> {
+            if (location.isEnabled()) {
+                startSecondaryDisplay(location);
+            } else {
+                appendLog("仪表转速显示已关闭");
+                refreshDisplayLocationControls();
+            }
+        };
+
+        if (activeId >= 0) {
+            appendLog("正在从“" + previous.displayName() + "”切换到“"
+                    + location.displayName() + "”");
+            stopSecondaryDisplay(activateSelection, previous);
+        } else {
+            activateSelection.run();
+        }
+    }
+
+    private void startSecondaryDisplay(RpmDisplayLocation location) {
+        if (projectionOperation != null) return;
+        if (!location.isEnabled()) {
+            refreshDisplayLocationControls();
+            return;
+        }
+        int activeId = activeSecondaryDisplayId();
+        if (activeId >= 0) {
+            launchSecondaryActivity(activeId, location);
+            return;
+        }
+
+        setDisplayLocationControlsEnabled(false);
+        appendLog("正在为“" + location.displayName() + "”请求 Flyme Auto 副屏通道");
+        projectionOperation = EcarxProjectionClient.createDisplay(this,
+                new EcarxProjectionClient.Callback() {
+                    @Override public void onComplete(int displayId) {
+                        projectionOperation = null;
+                        getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                                .putInt(PREF_DISPLAY_ID, displayId)
+                                .putString(PREF_ACTIVE_DISPLAY_LOCATION,
+                                        location.persistedValue())
+                                .apply();
+                        waitForProjectionDisplay(displayId, location, 20);
+                    }
+
+                    @Override public void onError(String message, Throwable error) {
+                        projectionOperation = null;
+                        persistSelectedDisplayLocation(RpmDisplayLocation.OFF);
+                        clearSecondaryDisplayRuntime();
+                        refreshDisplayLocationControls();
+                        appendLog(message + (error == null ? "" : "：" + error.getMessage()));
+                    }
+                });
+    }
+
+    private void waitForProjectionDisplay(
+            int displayId, RpmDisplayLocation location, int remainingAttempts) {
+        DisplayManager manager = getSystemService(DisplayManager.class);
+        Display display = manager == null ? null : manager.getDisplay(displayId);
+        if (display != null) {
+            launchSecondaryActivity(displayId, location);
+            return;
+        }
+        if (remainingAttempts <= 0) {
+            persistSelectedDisplayLocation(RpmDisplayLocation.OFF);
+            clearSecondaryDisplayRuntime();
+            refreshDisplayLocationControls();
+            appendLog("副屏已创建，但 Android 尚未注册显示 ID " + displayId);
+            return;
+        }
+        displayLocationGroup.postDelayed(
+                () -> waitForProjectionDisplay(displayId, location, remainingAttempts - 1),
+                100L);
+    }
+
+    private void launchSecondaryActivity(int displayId, RpmDisplayLocation location) {
+        try {
+            Intent intent = new Intent(this, SecondaryRpmActivity.class);
+            intent.putExtra(SecondaryRpmActivity.EXTRA_PROJECTION_DISPLAY_ID, displayId);
+            intent.putExtra(SecondaryRpmActivity.EXTRA_DISPLAY_LOCATION,
+                    location.persistedValue());
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                    | Intent.FLAG_ACTIVITY_MULTIPLE_TASK
+                    | Intent.FLAG_ACTIVITY_NO_ANIMATION);
+            ActivityOptions options = ActivityOptions.makeBasic();
+            options.setLaunchDisplayId(displayId);
+            startActivity(intent, options.toBundle());
+            appendLog("转速已选择“" + location.displayName()
+                    + "”，displayId=" + displayId);
+            refreshDisplayLocationControls();
+        } catch (RuntimeException error) {
+            persistSelectedDisplayLocation(RpmDisplayLocation.OFF);
+            refreshDisplayLocationControls();
+            appendLog("副屏 Activity 启动失败：" + error.getMessage());
+        }
+    }
+
+    private void stopSecondaryDisplay(
+            Runnable afterStopped, RpmDisplayLocation locationToRestoreOnError) {
+        if (projectionOperation != null) return;
+        int displayId = activeSecondaryDisplayId();
+        if (displayId < 0) {
+            clearSecondaryDisplayRuntime();
+            afterStopped.run();
+            return;
+        }
+        setDisplayLocationControlsEnabled(false);
+        projectionOperation = EcarxProjectionClient.stopDisplay(this, displayId,
+                new EcarxProjectionClient.Callback() {
+                    @Override public void onComplete(int ignored) {
+                        projectionOperation = null;
+                        clearSecondaryDisplayRuntime();
+                        afterStopped.run();
+                    }
+
+                    @Override public void onError(String message, Throwable error) {
+                        projectionOperation = null;
+                        persistSelectedDisplayLocation(locationToRestoreOnError);
+                        refreshDisplayLocationControls();
+                        appendLog(message + (error == null ? "" : "：" + error.getMessage()));
+                    }
+                });
+    }
+
+    private int activeSecondaryDisplayId() {
+        int displayId = getSharedPreferences(PREFS, MODE_PRIVATE)
+                .getInt(PREF_DISPLAY_ID, -1);
+        if (displayId < 0) return -1;
+        DisplayManager manager = getSystemService(DisplayManager.class);
+        if (manager != null && manager.getDisplay(displayId) != null) return displayId;
+        clearSecondaryDisplayRuntime();
+        return -1;
+    }
+
+    private RpmDisplayLocation selectedDisplayLocation() {
+        String value = getSharedPreferences(PREFS, MODE_PRIVATE)
+                .getString(PREF_DISPLAY_LOCATION, RpmDisplayLocation.OFF.persistedValue());
+        return RpmDisplayLocation.fromPersistedValue(value);
+    }
+
+    private RpmDisplayLocation activeDisplayLocation() {
+        String value = getSharedPreferences(PREFS, MODE_PRIVATE)
+                .getString(PREF_ACTIVE_DISPLAY_LOCATION,
+                        RpmDisplayLocation.OFF.persistedValue());
+        return RpmDisplayLocation.fromPersistedValue(value);
+    }
+
+    private void persistSelectedDisplayLocation(RpmDisplayLocation location) {
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                .putString(PREF_DISPLAY_LOCATION, location.persistedValue()).apply();
+    }
+
+    private void clearSecondaryDisplayRuntime() {
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                .remove(PREF_DISPLAY_ID)
+                .remove(PREF_ACTIVE_DISPLAY_LOCATION)
+                .apply();
+    }
+
+    private RpmDisplayLocation locationForCheckedId(int checkedId) {
+        if (displayLeftButton != null && checkedId == displayLeftButton.getId()) {
+            return RpmDisplayLocation.LEFT_SPEED;
+        }
+        if (displayRightButton != null && checkedId == displayRightButton.getId()) {
+            return RpmDisplayLocation.RIGHT_CARD;
+        }
+        return RpmDisplayLocation.OFF;
+    }
+
+    private int checkedIdForLocation(RpmDisplayLocation location) {
+        if (location == RpmDisplayLocation.LEFT_SPEED) return displayLeftButton.getId();
+        if (location == RpmDisplayLocation.RIGHT_CARD) return displayRightButton.getId();
+        return displayOffButton.getId();
+    }
+
+    private void setDisplayLocationControlsEnabled(boolean enabled) {
+        if (displayOffButton != null) displayOffButton.setEnabled(enabled);
+        if (displayLeftButton != null) displayLeftButton.setEnabled(enabled);
+        if (displayRightButton != null) displayRightButton.setEnabled(enabled);
+    }
+
+    private void refreshDisplayLocationControls() {
+        if (displayLocationGroup == null) return;
+        RpmDisplayLocation location = selectedDisplayLocation();
+        suppressLocationCallback = true;
+        displayLocationGroup.check(checkedIdForLocation(location));
+        suppressLocationCallback = false;
+        setDisplayLocationControlsEnabled(projectionOperation == null);
     }
 
     @Override public void onStatus(String status, boolean error) {

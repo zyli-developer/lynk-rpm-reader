@@ -10,8 +10,8 @@ android {
         applicationId 'com.lynk.rpmreader'
         minSdk 28
         targetSdk 34
-        versionCode 14
-        versionName '1.7.3'
+        versionCode 16
+        versionName '1.9.0'
     }
 
     buildTypes {
@@ -46,6 +46,8 @@ tasks.register('compileRpmLogicTest', JavaCompile) {
             'src/main/java/com/lynk/rpmreader/ProtoReader.java',
             'src/main/java/com/lynk/rpmreader/ApvpSignalCodec.java',
             'src/main/java/com/lynk/rpmreader/RpmGaugeModel.java',
+            'src/main/java/com/lynk/rpmreader/RpmDisplayLocation.java',
+            'src/main/java/com/lynk/rpmreader/RpmDisplayText.java',
             'src/main/java/com/lynk/rpmreader/StartupMotion.java',
             'src/main/java/com/lynk/rpmreader/CarRpmValue.java',
             'src/test/java/com/lynk/rpmreader/RpmProtoDecoderTest.java')

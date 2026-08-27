@@ -8,7 +8,8 @@ import java.util.List;
 
 /** Raw protobuf codec matching transfer_proto.SignalIdentify and Signal. */
 final class ApvpSignalCodec {
-    static final int ENGINE_RPM_ID = 308282774; // 0x12600596
+    static final int ENGINE_RPM_ID = 308282774; // 0x12600596, Flyme Auto 2.0
+    static final int ENGINE_RPM_ID_FLYME_AUTO_25 = 308282775; // 0x12600597
     static final String ENGINE_RPM_NAME = "EngNSafeEngN";
 
     static final class Reading {
@@ -26,6 +27,14 @@ final class ApvpSignalCodec {
     }
 
     private ApvpSignalCodec() {}
+
+    static boolean isEngineRpmReading(Reading reading) {
+        boolean knownId = reading.id == 0
+                || reading.id == ENGINE_RPM_ID
+                || reading.id == ENGINE_RPM_ID_FLYME_AUTO_25;
+        boolean knownName = reading.name.isEmpty() || ENGINE_RPM_NAME.equals(reading.name);
+        return knownId && knownName;
+    }
 
     static byte[] encodeIdentify(int id, String name) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();

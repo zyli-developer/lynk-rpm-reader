@@ -64,7 +64,7 @@ final class ApvpGrpcRpmClient implements AutoCloseable {
             byte[] request = ApvpSignalCodec.encodeIdentify(
                     ApvpSignalCodec.ENGINE_RPM_ID, ApvpSignalCodec.ENGINE_RPM_NAME);
             listener.onLog("APVP endpoint=localhost:40005, method=" + METHOD);
-            listener.onLog("读取 EngNSafeEngN=308282774 (0x12600596), Float");
+            listener.onLog("读取 EngNSafeEngN，兼容 APVP ID 0x12600596 / 0x12600597");
             activateTransfer();
 
             int validReads = 0;
@@ -73,12 +73,9 @@ final class ApvpGrpcRpmClient implements AutoCloseable {
                 byte[] response = ClientCalls.blockingUnaryCall(authenticated, readSignal,
                         CallOptions.DEFAULT.withDeadlineAfter(2, TimeUnit.SECONDS), request);
                 ApvpSignalCodec.Reading reading = ApvpSignalCodec.decodeSignal(response);
-                if (reading.id != 0 && reading.id != ApvpSignalCodec.ENGINE_RPM_ID) {
-                    throw new IOException("APVP returned unexpected signal id " + reading.id);
-                }
-                if (!reading.name.isEmpty()
-                        && !ApvpSignalCodec.ENGINE_RPM_NAME.equals(reading.name)) {
-                    throw new IOException("APVP returned unexpected signal " + reading.name);
+                if (!ApvpSignalCodec.isEngineRpmReading(reading)) {
+                    throw new IOException("APVP returned unexpected signal id=" + reading.id
+                            + " name=" + reading.name);
                 }
                 if (!Float.isFinite(reading.value) || reading.value < 0f) {
                     throw new IOException("APVP RPM unavailable: " + reading.value);
@@ -87,7 +84,8 @@ final class ApvpGrpcRpmClient implements AutoCloseable {
                 listener.onRpm(rpm, reading.mode);
                 if (validReads++ == 0) {
                     listener.onStatus("已连接车辆 APVP 发动机转速", false);
-                    listener.onLog("APVP client_pid=" + clientPid + "，已收到有效数据");
+                    listener.onLog("APVP client_pid=" + clientPid + "，已收到有效数据，signal_id="
+                            + reading.id + " (0x" + Integer.toHexString(reading.id) + ")");
                 }
                 if (rpm != lastLoggedRpm) {
                     Log.i(TAG, "APVP EngNSafeEngN=" + reading.value + " rpm, mode=" + reading.mode);

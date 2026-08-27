@@ -14,13 +14,13 @@
 </div>
 
 > [!IMPORTANT]
-> The current version has only been validated on the **2023 and 2025 Lynk & Co 08** running **Flyme Auto 2.0.0**. Other models, model years, and system versions have not been verified.
+> The current version has been validated on the **2023 and 2025 Lynk & Co 08 / Flyme Auto 2.0.0**, and on the connected **Lynk & Co 08 / Flyme Auto 2.5.0** test vehicle. Other models, model years, and system versions have not been verified.
 
 ## 🚗 Overview
 
 LynkRPMReader displays live engine RPM on a landscape head-unit screen and includes a startup gauge-sweep animation. It first reads the local APVP signal exposed by a compatible head unit, then falls back to the standard Android Car API and the optional Root Car API path when necessary.
 
-The current source uses package name `com.lynk.rpmreader`, version `1.7.3`, and `versionCode 14`.
+The current source uses package name `com.lynk.rpmreader`, version `1.9.0`, and `versionCode 16`.
 
 This is an unofficial community project. It is not affiliated with, authorized by, or endorsed by Lynk & Co, Geely, Meizu, or any of their affiliates. Brand and product names are used solely to identify verified device compatibility.
 
@@ -37,6 +37,7 @@ This is an unofficial community project. It is not affiliated with, authorized b
 | --- | --- | --- | --- |
 | Lynk & Co 08 | 2023 | Flyme Auto 2.0.0 | ✅ Verified |
 | Lynk & Co 08 | 2025 | Flyme Auto 2.0.0 | ✅ Verified |
+| Lynk & Co 08 | Not recorded | Flyme Auto 2.5.0 | ✅ Verified on vehicle |
 
 The app does not depend on a specific CPU. Compatibility depends on vehicle signals, local services, and system permissions; do not determine compatibility from the cockpit processor alone.
 
@@ -45,6 +46,7 @@ The app does not depend on a specific CPU. Compatibility depends on vehicle sign
 - 📈 Live landscape RPM gauge
 - 🚀 One-shot startup animation and gauge self-test sweep
 - 🔌 Local APVP gRPC engine-speed reader for compatible head units
+- 🖥️ Experimental mutually exclusive instrument placement: off, left speed area, or right RPM card (vehicle-side region mapping still requires validation)
 - 🚘 Standard Android Automotive `ENGINE_RPM` fallback
 - 🔐 Optional Root Car API fallback
 - 🧪 Zero-dependency JVM tests for protocol and gauge logic
