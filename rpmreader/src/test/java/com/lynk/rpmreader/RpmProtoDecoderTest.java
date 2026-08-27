@@ -31,8 +31,10 @@ public final class RpmProtoDecoderTest {
         formatsAnimatedGaugeReadouts();
         formatsInstrumentReadout();
         keepsInstrumentLocationExclusive();
+        findsFlymeAutoHudDisplay();
+        rejectsNonHudDisplays();
         validatesStartupAnimationTimeline();
-        System.out.println("RPM logic tests passed: " + passed + "/19");
+        System.out.println("RPM logic tests passed: " + passed + "/21");
     }
 
     private void convertsCarApiFloatRpm() {
@@ -178,11 +180,11 @@ public final class RpmProtoDecoderTest {
     }
 
     private void formatsInstrumentReadout() {
-        check("1.0 × 1000 RPM".equals(RpmDisplayText.available(1000)),
+        check("1.0 × 1000".equals(RpmDisplayText.available(1000)),
                 "instrument readout uses one decimal and x1000 unit");
-        check("0.9 × 1000 RPM".equals(RpmDisplayText.available(850)),
+        check("0.9 × 1000".equals(RpmDisplayText.available(850)),
                 "instrument readout rounds to one decimal");
-        check("—.- × 1000 RPM".equals(RpmDisplayText.unavailable()),
+        check("—.- × 1000".equals(RpmDisplayText.unavailable()),
                 "instrument unavailable placeholder");
         pass();
     }
@@ -197,6 +199,25 @@ public final class RpmProtoDecoderTest {
         check(RpmDisplayLocation.fromPersistedValue("left_speed,right_card")
                         == RpmDisplayLocation.OFF,
                 "combined placement is rejected");
+        pass();
+    }
+
+    private void findsFlymeAutoHudDisplay() {
+        String dump = "mBaseDisplayInfo=DisplayInfo{\"Built-in Screen\", displayId 0, "
+                + "real 2560 x 1600}\n"
+                + "mBaseDisplayInfo=DisplayInfo{\"Ex Share Display 5\", displayId 6, "
+                + "FLAG_PRIVATE, real 520 x 280, type VIRTUAL, "
+                + "owner com.ecarx.dfe.service (uid 1000)}";
+        check(HudDisplayParser.findHudDisplayId(dump) == 6,
+                "Flyme Auto private 520x280 HUD display is detected");
+        pass();
+    }
+
+    private void rejectsNonHudDisplays() {
+        String dump = "mBaseDisplayInfo=DisplayInfo{\"Ex Share Display 9\", displayId 10, "
+                + "FLAG_PRIVATE, real 1920 x 720, type VIRTUAL}";
+        check(HudDisplayParser.findHudDisplayId(dump) == -1,
+                "non-HUD Ex Share Display is rejected");
         pass();
     }
 

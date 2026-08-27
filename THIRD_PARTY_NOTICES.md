@@ -4,6 +4,8 @@ The application resolves the following libraries through Gradle; their source co
 
 | Component | Declared version | License | Source |
 | --- | --- | --- | --- |
+| Shizuku API and provider | 13.1.5 | Apache-2.0 | https://github.com/RikkaApps/Shizuku-API |
+| AndroidX Annotation | 1.8.2 | Apache-2.0 | https://developer.android.com/jetpack/androidx/releases/annotation |
 | gRPC-Java (`grpc-netty`, `grpc-stub`) | 1.80.0 | Apache-2.0 | https://github.com/grpc/grpc-java |
 | Netty | 4.1.136.Final BOM | Apache-2.0 | https://github.com/netty/netty |
 

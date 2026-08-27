@@ -4,7 +4,8 @@ package com.lynk.rpmreader;
 enum RpmDisplayLocation {
     OFF("off", "关闭"),
     LEFT_SPEED("left_speed", "左侧速度区"),
-    RIGHT_CARD("right_card", "右侧转速卡片");
+    RIGHT_CARD("right_card", "右侧转速卡片"),
+    HUD_LEFT("hud_left", "HUD 左下角（仅 D 挡）");
 
     private final String persistedValue;
     private final String displayName;
