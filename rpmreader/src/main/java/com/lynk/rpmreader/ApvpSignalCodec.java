@@ -6,30 +6,19 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Raw protobuf codec for the APVP transfer service messages used by the RPM path. */
+/** Raw protobuf codec matching transfer_proto.SignalIdentify and Signal. */
 final class ApvpSignalCodec {
+    static final int ENGINE_RPM_ID = 308282774; // 0x12600596, Flyme Auto 2.0
+    static final int ENGINE_RPM_ID_FLYME_AUTO_25 = 308282775; // 0x12600597
     static final String ENGINE_RPM_NAME = "EngNSafeEngN";
-    static final int VALUE_TYPE_INT32 = 0x00400000;
-    static final int VALUE_TYPE_FLOAT = 0x00600000;
 
-    static final class SignalConfig {
+    static final class SignalIdentity {
         final int id;
         final String name;
-        final String module;
-        final boolean readOnly;
-        final int valueType;
-        final int notifyMode;
-        final String description;
 
-        SignalConfig(int id, String name, String module, boolean readOnly,
-                int valueType, int notifyMode, String description) {
+        SignalIdentity(int id, String name) {
             this.id = id;
             this.name = name;
-            this.module = module;
-            this.readOnly = readOnly;
-            this.valueType = valueType;
-            this.notifyMode = notifyMode;
-            this.description = description;
         }
     }
 
@@ -49,32 +38,30 @@ final class ApvpSignalCodec {
 
     private ApvpSignalCodec() {}
 
-    static boolean isEngineRpmConfig(SignalConfig config) {
-        return config.id != 0
-                && ENGINE_RPM_NAME.equals(config.name)
-                && config.readOnly
-                && (config.valueType == VALUE_TYPE_FLOAT
-                    || config.valueType == VALUE_TYPE_INT32);
+    static boolean isEngineRpmReading(Reading reading) {
+        boolean knownId = reading.id == 0
+                || reading.id == ENGINE_RPM_ID
+                || reading.id == ENGINE_RPM_ID_FLYME_AUTO_25;
+        boolean knownName = reading.name.isEmpty() || ENGINE_RPM_NAME.equals(reading.name);
+        return knownId && knownName;
     }
 
-    static boolean matches(Reading reading, SignalConfig config) {
-        boolean hasIdentity = reading.id != 0 || !reading.name.isEmpty();
-        boolean idMatches = reading.id == 0 || reading.id == config.id;
-        boolean nameMatches = reading.name.isEmpty() || reading.name.equals(config.name);
-        return hasIdentity && idMatches && nameMatches;
+    static boolean isEngineRpmReading(Reading reading, SignalIdentity expected) {
+        if (expected == null || !isEngineRpmConfig(expected)) return false;
+        boolean idMatches = reading.id == 0 || reading.id == expected.id;
+        boolean nameMatches = reading.name.isEmpty() || expected.name.isEmpty()
+                || expected.name.equals(reading.name);
+        return idMatches && nameMatches;
     }
 
     static byte[] encodeIdentify(int id, String name) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        writeVarintField(out, 1, id);
-        writeBytesField(out, 2, name.getBytes(StandardCharsets.UTF_8));
-        return out.toByteArray();
-    }
-
-    /** ListenerRequest.mode defaults to selective (0); field 2 contains requested identities. */
-    static byte[] encodeListenerRequest(int id, String name) {
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        writeBytesField(out, 2, encodeIdentify(id, name));
+        writeVarint(out, 8);
+        writeVarint(out, id);
+        byte[] text = name.getBytes(StandardCharsets.UTF_8);
+        writeVarint(out, 18);
+        writeVarint(out, text.length);
+        out.write(text, 0, text.length);
         return out.toByteArray();
     }
 
@@ -83,31 +70,28 @@ final class ApvpSignalCodec {
         int id = 0;
         String name = "";
         int mode = 0;
-        Float firstNumber = null;
+        Float firstFloat = null;
         ProtoReader.Field field;
         while ((field = reader.next()) != null) {
             if (field.number == 1 && field.wireType == 2) {
                 byte[] identify = reader.readBytes();
                 id = ProtoReader.firstInt32(identify, 1, 0);
                 byte[] nameBytes = ProtoReader.firstBytes(identify, 2);
-                if (nameBytes != null) name = new String(nameBytes, StandardCharsets.UTF_8);
+                if (nameBytes != null) {
+                    name = new String(nameBytes, StandardCharsets.UTF_8);
+                }
             } else if (field.number == 2 && field.wireType == 0) {
                 mode = (int) reader.readVarint();
-            } else if (field.number == 3 && field.wireType == 0) {
-                int encoded = (int) reader.readVarint();
-                if (firstNumber == null) firstNumber = (float) decodeZigZag32(encoded);
-            } else if (field.number == 3 && field.wireType == 2) {
-                byte[] packed = reader.readBytes();
-                if (firstNumber == null && packed.length > 0) {
-                    firstNumber = (float) decodeZigZag32((int) new ProtoReader(packed).readVarint());
-                }
             } else if (field.number == 5 && field.wireType == 5) {
-                int bits = reader.readFixed32();
-                if (firstNumber == null) firstNumber = Float.intBitsToFloat(bits);
+                if (firstFloat == null) {
+                    firstFloat = Float.intBitsToFloat(reader.readFixed32());
+                } else {
+                    reader.readFixed32();
+                }
             } else if (field.number == 5 && field.wireType == 2) {
                 byte[] packed = reader.readBytes();
-                if (firstNumber == null && packed.length >= 4) {
-                    firstNumber = Float.intBitsToFloat((packed[0] & 0xff)
+                if (firstFloat == null && packed.length >= 4) {
+                    firstFloat = Float.intBitsToFloat((packed[0] & 0xff)
                             | ((packed[1] & 0xff) << 8)
                             | ((packed[2] & 0xff) << 16)
                             | ((packed[3] & 0xff) << 24));
@@ -116,69 +100,16 @@ final class ApvpSignalCodec {
                 reader.skip(field);
             }
         }
-        if (firstNumber == null) throw new IOException("APVP response contains no numeric value");
-        return new Reading(id, name, mode, firstNumber);
-    }
-
-    /** Decodes ListSignals.groups(field 1) -> Signals.signals(field 3). */
-    static List<Reading> decodeSignalBatch(byte[] data) throws IOException {
-        List<Reading> result = new ArrayList<>();
-        ProtoReader outer = new ProtoReader(data);
-        ProtoReader.Field outerField;
-        while ((outerField = outer.next()) != null) {
-            if (outerField.number != 1 || outerField.wireType != 2) {
-                outer.skip(outerField);
-                continue;
-            }
-            ProtoReader group = new ProtoReader(outer.readBytes());
-            ProtoReader.Field groupField;
-            while ((groupField = group.next()) != null) {
-                if (groupField.number == 3 && groupField.wireType == 2) {
-                    result.add(decodeSignal(group.readBytes()));
-                } else {
-                    group.skip(groupField);
-                }
-            }
+        if (firstFloat == null) {
+            throw new IOException("APVP response contains no float value");
         }
-        return result;
-    }
-
-    static SignalConfig decodeSignalConfig(byte[] data) throws IOException {
-        int id = 0;
-        String name = "";
-        String module = "";
-        boolean readOnly = false;
-        int valueType = 0;
-        int notifyMode = 0;
-        String description = "";
-        ProtoReader reader = new ProtoReader(data);
-        ProtoReader.Field field;
-        while ((field = reader.next()) != null) {
-            if (field.number == 1 && field.wireType == 2) {
-                byte[] identify = reader.readBytes();
-                id = ProtoReader.firstInt32(identify, 1, 0);
-                byte[] nameBytes = ProtoReader.firstBytes(identify, 2);
-                if (nameBytes != null) name = new String(nameBytes, StandardCharsets.UTF_8);
-            } else if (field.number == 2 && field.wireType == 2) {
-                module = new String(reader.readBytes(), StandardCharsets.UTF_8);
-            } else if (field.number == 3 && field.wireType == 0) {
-                readOnly = reader.readVarint() != 0;
-            } else if (field.number == 4 && field.wireType == 0) {
-                valueType = (int) reader.readVarint();
-            } else if (field.number == 5 && field.wireType == 0) {
-                notifyMode = (int) reader.readVarint();
-            } else if (field.number == 8 && field.wireType == 2) {
-                description = new String(reader.readBytes(), StandardCharsets.UTF_8);
-            } else {
-                reader.skip(field);
-            }
-        }
-        return new SignalConfig(id, name, module, readOnly, valueType, notifyMode, description);
+        return new Reading(id, name, mode, firstFloat);
     }
 
     static byte[] encodeInt64(long value) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        writeVarintField(out, 1, value);
+        writeVarint(out, 8);
+        writeVarint(out, value);
         return out.toByteArray();
     }
 
@@ -189,7 +120,8 @@ final class ApvpSignalCodec {
         ProtoReader.Field field;
         while ((field = reader.next()) != null) {
             if (field.number == 1 && field.wireType == 2) {
-                ProtoReader transferReader = new ProtoReader(reader.readBytes());
+                byte[] transfer = reader.readBytes();
+                ProtoReader transferReader = new ProtoReader(transfer);
                 ProtoReader.Field transferField;
                 while ((transferField = transferReader.next()) != null) {
                     if (transferField.number == 1 && transferField.wireType == 0) {
@@ -205,19 +137,27 @@ final class ApvpSignalCodec {
         return result;
     }
 
-    private static int decodeZigZag32(int encoded) {
-        return (encoded >>> 1) ^ -(encoded & 1);
+    /** SignalConfig field 1 is its nested SignalIdentify. */
+    static boolean isSignalConfig(byte[] data, int wantedId, String wantedName) throws IOException {
+        SignalIdentity identity = decodeSignalConfigIdentity(data);
+        return identity != null && (identity.id == wantedId || wantedName.equals(identity.name));
     }
 
-    private static void writeVarintField(ByteArrayOutputStream out, int field, long value) {
-        writeVarint(out, field << 3);
-        writeVarint(out, value);
+    static SignalIdentity decodeSignalConfigIdentity(byte[] data) throws IOException {
+        byte[] identify = ProtoReader.firstBytes(data, 1);
+        if (identify == null) return null;
+        int id = ProtoReader.firstInt32(identify, 1, 0);
+        byte[] nameBytes = ProtoReader.firstBytes(identify, 2);
+        String name = nameBytes == null ? "" : new String(nameBytes, StandardCharsets.UTF_8);
+        return new SignalIdentity(id, name);
     }
 
-    private static void writeBytesField(ByteArrayOutputStream out, int field, byte[] value) {
-        writeVarint(out, (field << 3) | 2);
-        writeVarint(out, value.length);
-        out.write(value, 0, value.length);
+    static boolean isEngineRpmConfig(SignalIdentity identity) {
+        if (identity == null) return false;
+        if (ENGINE_RPM_NAME.equals(identity.name)) return identity.id > 0;
+        return identity.name.isEmpty()
+                && (identity.id == ENGINE_RPM_ID
+                || identity.id == ENGINE_RPM_ID_FLYME_AUTO_25);
     }
 
     private static void writeVarint(ByteArrayOutputStream out, long value) {
