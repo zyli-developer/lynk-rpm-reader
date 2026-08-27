@@ -16,12 +16,16 @@ public final class RpmProtoDecoderTest {
         convertsCarApiFloatRpm();
         rejectsInvalidCarApiRpm();
         encodesApvpSignalIdentity();
+        encodesApvpListenerRequest();
         decodesApvpUnpackedFloat();
-        acceptsFlymeAuto25SignalIdentity();
-        rejectsUnknownApvpSignalIdentity();
         decodesApvpPackedFloat();
-        rejectsApvpResponseWithoutFloat();
-        decodesApvpTransferIdsAndConfig();
+        decodesApvpInt32();
+        rejectsApvpResponseWithoutNumber();
+        decodesDynamicApvpConfig();
+        rejectsUnsafeApvpConfig();
+        matchesResolvedApvpIdentity();
+        decodesApvpSignalBatch();
+        decodesApvpTransferIds();
         mapsGaugeMovement();
         clampsGaugeRange();
         usesConfiguredPowerPeakScale();
@@ -30,7 +34,7 @@ public final class RpmProtoDecoderTest {
         formatsInstrumentReadout();
         keepsInstrumentLocationExclusive();
         validatesStartupAnimationTimeline();
-        System.out.println("RPM logic tests passed: " + passed + "/17");
+        System.out.println("RPM logic tests passed: " + passed + "/21");
     }
 
     private void convertsCarApiFloatRpm() {
@@ -48,44 +52,31 @@ public final class RpmProtoDecoderTest {
     }
 
     private void encodesApvpSignalIdentity() throws Exception {
-        byte[] request = ApvpSignalCodec.encodeIdentify(308282774, "EngNSafeEngN");
-        check(ProtoReader.firstInt32(request, 1, 0) == 308282774, "request signal id");
+        byte[] request = ApvpSignalCodec.encodeIdentify(308282999, "EngNSafeEngN");
+        check(ProtoReader.firstInt32(request, 1, 0) == 308282999, "request signal id");
         check("EngNSafeEngN".equals(new String(ProtoReader.firstBytes(request, 2), "UTF-8")),
                 "request signal name");
         pass();
     }
 
+    private void encodesApvpListenerRequest() throws Exception {
+        byte[] request = ApvpSignalCodec.encodeListenerRequest(308282999, "EngNSafeEngN");
+        check(ProtoReader.firstInt32(request, 1, 0) == 0, "selective listener mode");
+        byte[] identify = ProtoReader.firstBytes(request, 2);
+        check(identify != null && ProtoReader.firstInt32(identify, 1, 0) == 308282999,
+                "listener signal id");
+        check("EngNSafeEngN".equals(new String(ProtoReader.firstBytes(identify, 2), "UTF-8")),
+                "listener signal name");
+        pass();
+    }
+
     private void decodesApvpUnpackedFloat() throws Exception {
-        byte[] identify = ApvpSignalCodec.encodeIdentify(308282774, "EngNSafeEngN");
+        byte[] identify = ApvpSignalCodec.encodeIdentify(308282999, "EngNSafeEngN");
         ApvpSignalCodec.Reading reading = ApvpSignalCodec.decodeSignal(concat(
                 bytesField(1, identify), varintField(2, 1),
                 fixed32Field(5, Float.floatToIntBits(1666.5f))));
-        check(reading.id == 308282774 && "EngNSafeEngN".equals(reading.name), "response identity");
+        check(reading.id == 308282999 && "EngNSafeEngN".equals(reading.name), "response identity");
         check(reading.value == 1666.5f && reading.mode == 1, "unpacked Float and mode");
-        pass();
-    }
-
-    private void acceptsFlymeAuto25SignalIdentity() throws Exception {
-        byte[] identify = ApvpSignalCodec.encodeIdentify(
-                ApvpSignalCodec.ENGINE_RPM_ID_FLYME_AUTO_25, ApvpSignalCodec.ENGINE_RPM_NAME);
-        ApvpSignalCodec.Reading reading = ApvpSignalCodec.decodeSignal(concat(
-                bytesField(1, identify), varintField(2, 1),
-                fixed32Field(5, Float.floatToIntBits(1350.0f))));
-        check(ApvpSignalCodec.isEngineRpmReading(reading),
-                "Flyme Auto 2.5 RPM signal identity");
-        check(reading.id == 308282775 && reading.value == 1350.0f,
-                "Flyme Auto 2.5 RPM signal payload");
-        pass();
-    }
-
-    private void rejectsUnknownApvpSignalIdentity() {
-        check(!ApvpSignalCodec.isEngineRpmReading(new ApvpSignalCodec.Reading(
-                        308282776, ApvpSignalCodec.ENGINE_RPM_NAME, 0, 1200.0f)),
-                "unknown APVP signal ID must be rejected");
-        check(!ApvpSignalCodec.isEngineRpmReading(new ApvpSignalCodec.Reading(
-                        ApvpSignalCodec.ENGINE_RPM_ID_FLYME_AUTO_25,
-                        "VehicleSpeed", 0, 1200.0f)),
-                "unexpected APVP signal name must be rejected");
         pass();
     }
 
@@ -96,20 +87,87 @@ public final class RpmProtoDecoderTest {
         pass();
     }
 
-    private void rejectsApvpResponseWithoutFloat() {
+    private void decodesApvpInt32() throws Exception {
+        ApvpSignalCodec.Reading reading = ApvpSignalCodec.decodeSignal(
+                bytesField(3, varint(2400)));
+        check(reading.value == 1200f, "packed sint32");
+        pass();
+    }
+
+    private void rejectsApvpResponseWithoutNumber() {
         try {
             ApvpSignalCodec.decodeSignal(varintField(2, 1));
-            throw new AssertionError("response without Float must fail");
+            throw new AssertionError("response without numeric value must fail");
         } catch (IOException expected) { pass(); }
     }
 
-    private void decodesApvpTransferIdsAndConfig() throws Exception {
+    private void decodesDynamicApvpConfig() throws Exception {
+        byte[] configBytes = concat(
+                bytesField(1, ApvpSignalCodec.encodeIdentify(308282999, "EngNSafeEngN")),
+                bytesField(2, "VDDM".getBytes("UTF-8")),
+                varintField(3, 1),
+                varintField(4, ApvpSignalCodec.VALUE_TYPE_FLOAT),
+                varintField(5, 2),
+                bytesField(8, "engine speed".getBytes("UTF-8")));
+        ApvpSignalCodec.SignalConfig config = ApvpSignalCodec.decodeSignalConfig(configBytes);
+        check(config.id == 308282999 && "EngNSafeEngN".equals(config.name),
+                "dynamic config identity");
+        check("VDDM".equals(config.module) && config.readOnly, "dynamic config metadata");
+        check(config.valueType == ApvpSignalCodec.VALUE_TYPE_FLOAT && config.notifyMode == 2,
+                "dynamic config type and notify mode");
+        check(ApvpSignalCodec.isEngineRpmConfig(config), "dynamic RPM config accepted");
+        pass();
+    }
+
+    private void rejectsUnsafeApvpConfig() {
+        check(!ApvpSignalCodec.isEngineRpmConfig(new ApvpSignalCodec.SignalConfig(
+                        308282999, "EngNSafeEngN", "VDDM", false,
+                        ApvpSignalCodec.VALUE_TYPE_FLOAT, 0, "")),
+                "writable config is rejected");
+        check(!ApvpSignalCodec.isEngineRpmConfig(new ApvpSignalCodec.SignalConfig(
+                        308282999, "VehicleSpeed", "VDDM", true,
+                        ApvpSignalCodec.VALUE_TYPE_FLOAT, 0, "")),
+                "wrong signal name is rejected");
+        pass();
+    }
+
+    private void matchesResolvedApvpIdentity() {
+        ApvpSignalCodec.SignalConfig config = new ApvpSignalCodec.SignalConfig(
+                308282999, "EngNSafeEngN", "VDDM", true,
+                ApvpSignalCodec.VALUE_TYPE_FLOAT, 0, "");
+        check(ApvpSignalCodec.matches(new ApvpSignalCodec.Reading(
+                        308282999, "EngNSafeEngN", 0, 1200f), config),
+                "runtime-discovered identity matches");
+        check(!ApvpSignalCodec.matches(new ApvpSignalCodec.Reading(
+                        308282998, "EngNSafeEngN", 0, 1200f), config),
+                "stale numeric ID is rejected");
+        check(!ApvpSignalCodec.matches(new ApvpSignalCodec.Reading(
+                        0, "", 0, 1200f), config), "missing identity is rejected");
+        pass();
+    }
+
+    private void decodesApvpSignalBatch() throws Exception {
+        byte[] unrelated = concat(
+                bytesField(1, ApvpSignalCodec.encodeIdentify(7, "VehicleSpeed")),
+                fixed32Field(5, Float.floatToIntBits(55f)));
+        byte[] rpm = concat(
+                bytesField(1, ApvpSignalCodec.encodeIdentify(308282999, "EngNSafeEngN")),
+                varintField(2, 1), fixed32Field(5, Float.floatToIntBits(1425.5f)));
+        byte[] group = concat(varintField(1, 1), varintField(2, 1),
+                bytesField(3, unrelated), bytesField(3, rpm));
+        List<ApvpSignalCodec.Reading> readings = ApvpSignalCodec.decodeSignalBatch(
+                bytesField(1, group));
+        check(readings.size() == 2, "stream batch signal count");
+        check(readings.get(1).id == 308282999 && readings.get(1).value == 1425.5f,
+                "stream batch RPM payload");
+        pass();
+    }
+
+    private void decodesApvpTransferIds() throws Exception {
         byte[] first = concat(varintField(1, 41), bytesField(2, "first".getBytes("UTF-8")));
         List<Long> ids = ApvpSignalCodec.decodeTransferIds(concat(
                 bytesField(1, first), bytesField(1, varintField(1, 99))));
         check(ids.size() == 2 && ids.get(0) == 41L && ids.get(1) == 99L, "transfer IDs");
-        byte[] config = bytesField(1, ApvpSignalCodec.encodeIdentify(308282774, "EngNSafeEngN"));
-        check(ApvpSignalCodec.isSignalConfig(config, 308282774, "EngNSafeEngN"), "RPM config");
         pass();
     }
 
