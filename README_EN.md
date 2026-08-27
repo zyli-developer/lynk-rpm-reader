@@ -37,7 +37,7 @@ This is an unofficial community project. It is not affiliated with, authorized b
 | --- | --- | --- | --- |
 | Lynk & Co 08 | 2023 | Flyme Auto 2.0.0 | ✅ Verified |
 | Lynk & Co 08 | 2025 | Flyme Auto 2.0.0 | ✅ Verified |
-| Lynk & Co 08 | Not recorded | Flyme Auto 2.5.0 | ✅ Verified on vehicle |
+| Lynk & Co 08 | 2025 | Flyme Auto 2.5.0 | ✅ Verified on vehicle |
 
 The app does not depend on a specific CPU. Compatibility depends on vehicle signals, local services, and system permissions; do not determine compatibility from the cockpit processor alone.
 
