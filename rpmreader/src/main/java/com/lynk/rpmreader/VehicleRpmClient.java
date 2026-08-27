@@ -28,7 +28,7 @@ final class VehicleRpmClient implements AutoCloseable {
     void start() {
         closed.set(false);
         listener.onLog("读取顺序：车辆 APVP → Android Car API → Root Car API");
-        listener.onLog("优先使用兼容车机的 APVP readSignal，标准 ENGINE_RPM 作为后备");
+        listener.onLog("优先使用动态发现的 APVP readSignal，标准 ENGINE_RPM 作为后备");
         Log.i(TAG, "Starting APVP gRPC RPM path");
         ApvpGrpcRpmClient apvpClient = new ApvpGrpcRpmClient(listener);
         synchronized (lock) {

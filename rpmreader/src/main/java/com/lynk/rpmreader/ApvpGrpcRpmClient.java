@@ -61,11 +61,14 @@ final class ApvpGrpcRpmClient implements AutoCloseable {
                     .setRequestMarshaller(MARSHALLER)
                     .setResponseMarshaller(MARSHALLER)
                     .build();
-            byte[] request = ApvpSignalCodec.encodeIdentify(
-                    ApvpSignalCodec.ENGINE_RPM_ID, ApvpSignalCodec.ENGINE_RPM_NAME);
             listener.onLog("APVP endpoint=localhost:40005, method=" + METHOD);
-            listener.onLog("读取 EngNSafeEngN，兼容 APVP ID 0x12600596 / 0x12600597");
-            activateTransfer();
+            Target target = activateTransfer();
+            byte[] request = ApvpSignalCodec.encodeIdentify(target.identity.id, target.identity.name);
+            String targetDescription = "transfer=" + target.transferId + "，signal_id="
+                    + target.identity.id + " (0x" + Integer.toHexString(target.identity.id)
+                    + ")，name=" + target.identity.name;
+            listener.onLog("APVP 已按配置发现 " + targetDescription);
+            Log.i(TAG, "APVP discovered " + targetDescription);
 
             int validReads = 0;
             int lastLoggedRpm = Integer.MIN_VALUE;
@@ -73,7 +76,7 @@ final class ApvpGrpcRpmClient implements AutoCloseable {
                 byte[] response = ClientCalls.blockingUnaryCall(authenticated, readSignal,
                         CallOptions.DEFAULT.withDeadlineAfter(2, TimeUnit.SECONDS), request);
                 ApvpSignalCodec.Reading reading = ApvpSignalCodec.decodeSignal(response);
-                if (!ApvpSignalCodec.isEngineRpmReading(reading)) {
+                if (!ApvpSignalCodec.isEngineRpmReading(reading, target.identity)) {
                     throw new IOException("APVP returned unexpected signal id=" + reading.id
                             + " name=" + reading.name);
                 }
@@ -86,6 +89,9 @@ final class ApvpGrpcRpmClient implements AutoCloseable {
                     listener.onStatus("已连接车辆 APVP 发动机转速", false);
                     listener.onLog("APVP client_pid=" + clientPid + "，已收到有效数据，signal_id="
                             + reading.id + " (0x" + Integer.toHexString(reading.id) + ")");
+                    Log.i(TAG, "APVP first response signal_id=" + reading.id + " (0x"
+                            + Integer.toHexString(reading.id) + "), name=" + reading.name
+                            + ", mode=" + reading.mode + ", value=" + reading.value);
                 }
                 if (rpm != lastLoggedRpm) {
                     Log.i(TAG, "APVP EngNSafeEngN=" + reading.value + " rpm, mode=" + reading.mode);
@@ -101,7 +107,7 @@ final class ApvpGrpcRpmClient implements AutoCloseable {
         }
     }
 
-    private void activateTransfer() throws IOException {
+    private Target activateTransfer() throws IOException {
         ManagedChannel debugChannel = null;
         try {
             listener.onStatus("正在激活发动机转速数据传输", false);
@@ -115,25 +121,29 @@ final class ApvpGrpcRpmClient implements AutoCloseable {
                     CallOptions.DEFAULT.withDeadlineAfter(2, TimeUnit.SECONDS), new byte[0]);
             List<Long> transferIds = ApvpSignalCodec.decodeTransferIds(allResponse);
             listener.onLog("APVP debug：发现 " + transferIds.size() + " 个 transfer");
+            Log.i(TAG, "APVP transfer IDs=" + transferIds);
 
             MethodDescriptor<byte[], byte[]> getConfigs = method(
                     "transfer_proto.TransferDebugServer/getTransferSignalConfig",
                     MethodDescriptor.MethodType.SERVER_STREAMING);
             Long matched = null;
+            ApvpSignalCodec.SignalIdentity matchedIdentity = null;
             for (long transferId : transferIds) {
                 Iterator<byte[]> configs = ClientCalls.blockingServerStreamingCall(debug, getConfigs,
                         CallOptions.DEFAULT.withDeadlineAfter(2, TimeUnit.SECONDS),
                         ApvpSignalCodec.encodeInt64(transferId));
                 while (configs.hasNext()) {
-                    if (ApvpSignalCodec.isSignalConfig(configs.next(),
-                            ApvpSignalCodec.ENGINE_RPM_ID, ApvpSignalCodec.ENGINE_RPM_NAME)) {
+                    ApvpSignalCodec.SignalIdentity identity =
+                            ApvpSignalCodec.decodeSignalConfigIdentity(configs.next());
+                    if (ApvpSignalCodec.isEngineRpmConfig(identity)) {
                         matched = transferId;
+                        matchedIdentity = identity;
                         break;
                     }
                 }
                 if (matched != null) break;
             }
-            if (matched == null) {
+            if (matched == null || matchedIdentity == null) {
                 throw new IOException("APVP transfer config does not contain EngNSafeEngN");
             }
             MethodDescriptor<byte[], byte[]> setReady = method(
@@ -143,8 +153,22 @@ final class ApvpGrpcRpmClient implements AutoCloseable {
                     CallOptions.DEFAULT.withDeadlineAfter(2, TimeUnit.SECONDS),
                     ApvpSignalCodec.encodeInt64(matched));
             listener.onLog("APVP transfer " + matched + " 已执行 setReady");
+            Log.i(TAG, "APVP setReady transfer=" + matched + ", signal_id="
+                    + matchedIdentity.id + " (0x" + Integer.toHexString(matchedIdentity.id)
+                    + "), name=" + matchedIdentity.name);
+            return new Target(matched, matchedIdentity);
         } finally {
             if (debugChannel != null) debugChannel.shutdownNow();
+        }
+    }
+
+    private static final class Target {
+        final long transferId;
+        final ApvpSignalCodec.SignalIdentity identity;
+
+        Target(long transferId, ApvpSignalCodec.SignalIdentity identity) {
+            this.transferId = transferId;
+            this.identity = identity;
         }
     }
 

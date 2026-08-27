@@ -1,15 +1,17 @@
 # 车机跨版本转速数据源自适应方案
 
-> 状态：架构设计与证据整理完成，尚未实施代码改造。
+> 状态：第一阶段 APVP 动态发现已实施并通过单元测试、实车验证；第二至第四阶段仍为后续规划。
 > 日期：2026-08-27
 > 适用项目：`lynk-rpm-reader`
 > 目标：车机升级后优先通过运行时发现继续读取发动机转速，避免因 APVP 信号 ID 或厂商属性 ID 变化而重新发布 APK。
 
 ## 关键结论
 
-当前 APK 的跨版本问题不是“读取了内存地址”，而是把 APVP 信号 ID 当成稳定常量使用。现有代码能够通过名称发现 `EngNSafeEngN` 所在的 transfer，却没有保存配置返回的真实信号 ID，最终仍使用固定的 `0x12600596` 发起读取。
+实施前的跨版本问题不是“读取了内存地址”，而是把 APVP 信号 ID 当成稳定常量使用：旧代码能够通过名称发现 `EngNSafeEngN` 所在的 transfer，却没有保存配置返回的真实信号 ID，最终仍使用固定的 `0x12600596` 发起读取。
 
-推荐方案是把数据源选择改为运行时能力探测：
+第一阶段改造已经修复这一根因。当前代码会从 `SignalConfig` 解码并保存完整的 `(signalId, signalName)`，使用运行时发现的身份发起读取，并将响应校验绑定到同一次发现结果。目标车机已经验证动态发现并读取 `0x12600597`，因此 APVP 主路径不再依赖按 Flyme/OTA 版本增加转速 ID 常量。
+
+完整目标方案仍是把数据源选择改为运行时能力探测：
 
 1. 标准 Car API、APVP、厂商属性通道分别报告当前固件实际支持的能力。
 2. APVP 按语义名称发现 `EngNSafeEngN`，保存车机返回的真实 `(signalId, signalName)`。
@@ -17,20 +19,20 @@
 4. 对所有候选数据源执行权限、首帧、时间戳、类型和状态检查后再选主通道。
 5. 系统指纹或能力摘要改变时自动废弃缓存并重新发现。
 
-这套方案能够覆盖“ID 改变、transfer 改变、标准属性可用性改变、流式接口能力改变”等常见升级差异。它不能保证覆盖厂商彻底删除 APVP、改变 protobuf 字段语义、关闭本地服务或加强第三方应用权限隔离等破坏性升级。
+其中 APVP 按名称发现并使用真实 ID 的第一阶段已经完成；流式订阅、统一多源选择以及版本指纹缓存仍待实施。完整方案能够覆盖“ID 改变、transfer 改变、标准属性可用性改变、流式接口能力改变”等常见升级差异，但不能保证覆盖厂商彻底删除 APVP、改变 protobuf 字段语义、关闭本地服务或加强第三方应用权限隔离等破坏性升级。
 
 ## 范围与约束
 
 ### 本文范围
 
-- 分析 `lynk-rpm-reader` 当前 APVP、标准 Car API 和 Root 后备路径。
+- 分析 `lynk-rpm-reader` 实施前的 APVP、标准 Car API 和 Root 后备路径，并记录第一阶段修复结果。
 - 对照参考 APK 的 APVP 配置发现、订阅和厂商 AIDL 实现。
 - 使用既有车机只读备份验证端口、权限、服务访问和实车运行结果。
-- 给出后续实现的模块边界、运行流程、失效策略和测试矩阵。
+- 给出剩余阶段的模块边界、运行流程、失效策略和测试矩阵。
 
 ### 不在本文范围内
 
-- 本轮不修改或构建 APK。
+- 本次已实施的代码改造仅覆盖 APVP 动态身份发现；流式订阅、统一多源监督器和版本指纹画像尚未实现。
 - 不执行车辆属性写入，不控制油门、挡位、车门、灯光或其他执行器。
 - 不把 Root、SELinux permissive 或系统签名视为普通用户安装环境的必要条件。
 - 不保证跨越厂商完全不同的车辆平台或被移除的私有协议。
@@ -48,20 +50,22 @@
 
 | 项目 | 当前车机观察 | 对跨版本设计的意义 |
 | --- | --- | --- |
-| APVP 转速信号 | `EngNSafeEngN = 308282774 / 0x12600596`，模块 `VDDM`，只读，Float | 名称和类型比数字 ID 更适合作为语义锚点 |
+| APVP 转速信号 | 历史配置为 `308282774 / 0x12600596`；目标车机当前返回 `308282775 / 0x12600597`；名称均为 `EngNSafeEngN` | 实车差异证明名称和类型比数字 ID 更适合作为语义锚点 |
 | APVP 数据服务 | `127.0.0.1:40005` 正在监听 | 当前普通 APK 可走本地 gRPC 读取路径 |
 | APVP 调试服务 | `127.0.0.1:40007` 正在监听 | 可以运行时枚举 transfer 和信号配置 |
-| 实车运行 | `setReady transfer(268435456)` 成功，随后读到 `EngNSafeEngN=0.0` | APVP 发现、激活、读取闭环已被实车日志验证；0 rpm 是合法状态 |
+| 实车运行 | 动态发现 `0x12600597` 并成功执行 `setReady transfer(268435456)`；随后读到连续非零转速并最终回到 `0.0` | APVP 发现、激活、读取闭环和转速变化均已验证；0 rpm 是合法状态 |
 | 标准 Car API | `ENGINE_RPM = 291504901 / 0x11600305` | 应保留为标准兼容路径 |
 | 标准属性权限 | `CAR_ENGINE_DETAILED` 为 `signature\|privileged` | 当前侧载 APK 不能依赖该权限 |
 | RPM Reader 权限 | 已授予 `CAR_POWERTRAIN`，未授予 `CAR_ENGINE_DETAILED` | Manifest 声明不等于获得标准转速属性权限 |
 | ECarX AIDL | EVCC 查询 `ecarxcar_service` 时产生 SELinux `find` 拒绝，系统当时为 permissive | 只能做可选能力探测，不能作为长期主通道 |
 
-当前备份只验证了 `0x12600596`。代码中的 `0x12600597` 是预设兼容值，现有车机资料没有证明它是某个目标固件的实际转速 ID。因此后续设计不应继续增加版本 ID 常量。
+历史备份验证了 `0x12600596`，目标车机的当前配置和运行日志验证了 `0x12600597`。这组差异证明数字 ID 会随版本变化。当前代码保留两个已知 ID 只用于名称缺失时的旧协议兼容；正常主路径按 `EngNSafeEngN` 名称接受配置返回的任意正 ID，不应继续增加版本 ID 常量。
 
-## 当前实现为什么仍然依赖版本
+## 实施前根因与当前修复
 
-当前 APVP 读取流程如下：
+### 实施前流程
+
+实施前的 APVP 读取流程如下：
 
 1. 连接 `localhost:40007`。
 2. 调用 `getAllTransfer` 获取 transfer 列表。
@@ -70,9 +74,21 @@
 5. 只保存匹配到的 `transferId` 并执行 `setReady`。
 6. 构造读取请求时仍固定使用 `ENGINE_RPM_ID = 308282774`。
 
-问题位于第 4 至第 6 步之间：配置中真实存在的 `SignalIdentify` 被降级成布尔判断，真实 ID 没有进入后续读取请求。
+根因位于第 4 至第 6 步之间：配置中真实存在的 `SignalIdentify` 被降级成布尔判断，真实 ID 没有进入后续读取请求。
 
-此外，当前 `isEngineRpmReading()` 只接受两个已知 ID。即使将读取请求修正为新 ID，服务器返回第三个合法 ID 时仍会被当成异常。允许空 ID 和空名称同时通过也会削弱响应身份校验。
+旧版 `isEngineRpmReading()` 还只接受两个已知 ID，因此服务器返回第三个合法 ID 时会被当成异常。
+
+### 当前流程
+
+当前实现已经改为：
+
+1. 枚举 transfer 并解码每项配置中的完整 `SignalIdentity(id, name)`。
+2. 名称精确等于 `EngNSafeEngN` 时接受配置返回的任意正 ID；只有名称缺失时才使用两个已知 ID 作为兼容后备。
+3. 激活流程同时保存 `transferId` 和本次发现的 `SignalIdentity`。
+4. 使用该身份的真实 ID 和名称构造读取请求。
+5. 使用同一身份校验响应；响应携带非空 ID 或名称时必须与发现结果一致。
+
+因此第一阶段已经消除“发现新 ID、读取旧 ID”的版本耦合。剩余风险属于后续阶段，例如 APVP 接口被删除、字段语义发生破坏性变化，或读取权限被进一步收紧。
 
 ## 目标架构
 
@@ -317,17 +333,17 @@ ECarX AIDL 的探测步骤应当是：
 
 ## 实施计划
 
-### 第一阶段：修正 APVP 动态发现
+### 第一阶段：修正 APVP 动态发现（已完成）
 
-1. 将 `isSignalConfig()` 的布尔结果替换为完整配置解析结果。
-2. 让 transfer 激活流程返回 `ResolvedRpmSignal`。
-3. 使用解析到的真实 ID 和名称构造读取请求。
-4. 响应校验绑定到本次解析结果，不再绑定两个常量。
-5. 为配置缺字段、重复名称、类型错误和无匹配分别定义错误。
+1. `decodeSignalConfigIdentity()` 保留配置中的完整信号身份。
+2. transfer 激活流程返回同时包含 `transferId` 和 `SignalIdentity` 的 `Target`。
+3. 读取请求使用解析到的真实 ID 和名称。
+4. 响应校验绑定到本次解析结果，不再绑定两个版本常量。
+5. 单元测试覆盖第三个模拟 ID、响应身份匹配和不匹配场景；实车验证覆盖 `0x12600597` 的非零转速到 0 的变化。
 
-完成条件：修改测试数据中的 APVP ID，而不修改应用常量，读取请求会自动使用新 ID。
+完成结果：修改测试数据中的 APVP ID 而不修改应用常量时，新身份能够被解析、保留并用于响应校验；目标车机也已使用运行时发现的 `0x12600597` 完成读取。
 
-### 第二阶段：流式订阅和健康管理
+### 第二阶段：流式订阅和健康管理（计划中）
 
 1. 实现 `listenerSignalStream`。
 2. 保留 `readSignal` 作为能力降级路径。
@@ -336,7 +352,7 @@ ECarX AIDL 的探测步骤应当是：
 
 完成条件：流式接口可用时不再以 100 ms 周期持续发起 unary 请求；流式接口不可用时仍能自动读取。
 
-### 第三阶段：多源能力选择
+### 第三阶段：多源能力选择（计划中）
 
 1. 标准 Car API 先枚举配置再尝试读取。
 2. 将 vendor 属性和 ECarX AIDL 封装成独立探测器。
@@ -345,7 +361,7 @@ ECarX AIDL 的探测步骤应当是：
 
 完成条件：任一数据源不可用不会阻塞其他数据源探测，来源切换原因可以从日志复现。
 
-### 第四阶段：版本指纹和兼容画像
+### 第四阶段：版本指纹和兼容画像（计划中）
 
 1. 保存系统与能力指纹。
 2. 指纹变化后自动清除解析缓存和无效候选缓存。
@@ -398,49 +414,49 @@ ECarX AIDL 的探测步骤应当是：
 
 ## Evidence
 
-以下证据均来自当前工作区和既有只读车机备份。SHA-256 用于确认后续复核时引用的文件版本。
+以下结论来自仓库源码和经授权取得的只读车机证据。公共仓库只保留可复现步骤和脱敏结论；原始日志、设备清单、反编译产物及其哈希保存在私有证据归档中，不随仓库提交。
 
-### E-001 当前读取请求仍使用固定 APVP ID
+### E-001 当前读取请求使用运行时发现的 APVP 身份
 
 - `source_type`: file
-- `source_ref`: [`ApvpGrpcRpmClient.java`](../rpmreader/src/main/java/com/lynk/rpmreader/ApvpGrpcRpmClient.java#L64)、[`ApvpSignalCodec.java`](../rpmreader/src/main/java/com/lynk/rpmreader/ApvpSignalCodec.java#L11)
+- `source_ref`: [`ApvpGrpcRpmClient.java`](../rpmreader/src/main/java/com/lynk/rpmreader/ApvpGrpcRpmClient.java#L65)、[`ApvpSignalCodec.java`](../rpmreader/src/main/java/com/lynk/rpmreader/ApvpSignalCodec.java#L146)
 - `content_hash`:
-  - `ApvpGrpcRpmClient.java`: `E68EEC9A866764A1FA9C4CA273C2D2BF2AA37657F0979057C39E21FD59C309DA`
-  - `ApvpSignalCodec.java`: `D84CFBA06FE5DAC8DB770C293176C6DDD538E49DC25C364B235D0430EBDB2503`
+  - `ApvpGrpcRpmClient.java`: `D41C031E93E6CA9CF49B84A687EB11BBB2A42F689E61DA6EB6CFC2C958B1D30E`
+  - `ApvpSignalCodec.java`: `80A6891C70B35C4516AB1F67820D2985F99AB66B366168D1AEC6D858B4C44D8C`
 - `repro_command`:
 
 ```powershell
-rg -n "ENGINE_RPM_ID|encodeIdentify|isSignalConfig" `
-  "D:\evcc\lynk-rpm-reader\rpmreader\src\main\java\com\lynk\rpmreader\ApvpGrpcRpmClient.java" `
-  "D:\evcc\lynk-rpm-reader\rpmreader\src\main\java\com\lynk\rpmreader\ApvpSignalCodec.java"
+rg -n "Target target|target.identity|decodeSignalConfigIdentity|isEngineRpmConfig|isEngineRpmReading" `
+  "rpmreader\src\main\java\com\lynk\rpmreader\ApvpGrpcRpmClient.java" `
+  "rpmreader\src\main\java\com\lynk\rpmreader\ApvpSignalCodec.java"
 ```
 
-- `raw_excerpt`: 配置匹配只返回布尔值；读取请求固定传入 `ENGINE_RPM_ID`。
+- `raw_excerpt`: 激活流程返回动态发现的 `Target`；读取请求使用 `target.identity.id/name`，响应校验也绑定 `target.identity`。
 
-### E-002 当前车机 APVP 配置包含名称、真实 ID 和类型信息
+### E-002 历史车机 APVP 配置包含名称、真实 ID 和类型信息
 
 - `source_type`: file
-- `source_ref`: [`dx11_cn_apvp_signal_config.json`](../../lynk/dx11_cn_apvp_signal_config.json#L43128)
-- `content_hash`: `7FFEE93DFA86CA283BB4F077F9E809572B95D12BBEB7450FAEEF5CB160234B93`
+- `source_ref`: `dx11_cn_apvp_signal_config.json`（私有证据归档，未提交）
+- `content_hash`: 记录于私有证据清单
 - `repro_command`:
 
 ```powershell
 rg -n -A 8 '"name": "EngNSafeEngN"' `
-  "D:\evcc\lynk\dx11_cn_apvp_signal_config.json"
+  "<private-config>\dx11_cn_apvp_signal_config.json"
 ```
 
-- `raw_excerpt`: `EngNSafeEngN` 的值为 `308282774`，模块为 `VDDM`，只读，值类型为 Float。
+- `raw_excerpt`: 历史配置中 `EngNSafeEngN` 的值为 `308282774 / 0x12600596`，模块为 `VDDM`，只读，值类型为 Float。
 
 ### E-003 参考 APK 提供完整发现和流式读取协议
 
 - `source_type`: file
-- `source_ref`: [`C1774u.java`](../../app/src/main/java/p000/C1774u.java#L75)
-- `content_hash`: `2E67F4ADEA75D1EDB599CCCF0661F404FBF601E32DB15B2789A8D8DED02580FC`
+- `source_ref`: `C1774u.java`（私有参考 APK 反编译归档，未提交）
+- `content_hash`: 记录于私有证据清单
 - `repro_command`:
 
 ```powershell
 rg -n "getAllTransfer|getTransferSignalConfig|setReady|readSignal|listenerSignalStream" `
-  "D:\evcc\app\src\main\java\p000\C1774u.java"
+  "<private-reference-source>\C1774u.java"
 ```
 
 - `raw_excerpt`: 存在 `getAllTransfer`、`getTransferSignalConfig`、`setReady`、`readSignal` 和 `listenerSignalStream`。
@@ -448,48 +464,44 @@ rg -n "getAllTransfer|getTransferSignalConfig|setReady|readSignal|listenerSignal
 ### E-004 参考 APK 会解码真实 SignalIdentify 并用于订阅
 
 - `source_type`: file
-- `source_ref`: [`nk3.java`](../../app/src/main/java/p000/nk3.java#L839)、[`C0059bf.java`](../../app/src/main/java/p000/C0059bf.java#L923)
-- `content_hash`:
-  - `nk3.java`: `3ED625664F0189FA0DA8D2752072DA2643F3E190B897FB39BF67C5BC73F3DFED`
-  - `C0059bf.java`: `4BCF8CF2AB528AED5E73711B0D719483FA403D9FD476BF555BC0C0C705FD0A02`
+- `source_ref`: `nk3.java`、`C0059bf.java`（私有参考 APK 反编译归档，未提交）
+- `content_hash`: 记录于私有证据清单
 - `repro_command`:
 
 ```powershell
 rg -n "m632l1|m633lI|new C0706me|m638ll|new be4" `
-  "D:\evcc\app\src\main\java\p000\nk3.java" `
-  "D:\evcc\app\src\main\java\p000\C0059bf.java"
+  "<private-reference-source>\nk3.java" `
+  "<private-reference-source>\C0059bf.java"
 ```
 
 - `raw_excerpt`: 配置解码保留 ID 和名称，订阅请求从配置映射中取回名称。
 
-### E-005 实车 APVP 服务和读取闭环已成立
+### E-005 目标车机动态 APVP 读取闭环已成立
 
 - `source_type`: log
-- `source_ref`: [`sockets.txt`](../../backups/headunit_2901149a53300031_20260827_094929/inventory/sockets.txt#L125)、[`logcat_all.txt`](../../backups/headunit_2901149a53300031_20260827_094929/inventory/logcat_all.txt#L161615)
-- `content_hash`:
-  - `sockets.txt`: `259C9303C4E8902A533433951BF1C51809948503795EC3AD76B54C96B7EC36D7`
-  - `logcat_all.txt`: `E1D7D6DB0AFF695F6BE0ACC8CE11D6D8FC378AF41CBF0858B8B9C9E34DEC5B72`
+- `source_ref`: `sockets.txt`、`logcat_all.txt`（私有只读采集归档，未提交）
+- `content_hash`: 记录于私有证据清单
 - `repro_command`:
 
 ```powershell
 rg -n "40005|40007" `
-  "D:\evcc\backups\headunit_2901149a53300031_20260827_094929\inventory\sockets.txt"
+  "<private-capture>\inventory\sockets.txt"
 rg -n "setReady transfer|APVP EngNSafeEngN" `
-  "D:\evcc\backups\headunit_2901149a53300031_20260827_094929\inventory\logcat_all.txt"
+  "<private-capture>\inventory\logcat_all.txt"
 ```
 
-- `raw_excerpt`: 40005/40007 在 loopback 监听；`setReady transfer(268435456)` 成功；应用随后读到 `EngNSafeEngN=0.0 rpm`。
+- `raw_excerpt`: 40005/40007 在 loopback 监听；配置返回 `EngNSafeEngN=308282775 / 0x12600597`；`setReady transfer(268435456)` 成功；应用随后读到连续非零转速并最终回到 `0.0 rpm`。
 
 ### E-006 标准转速属性受特权权限限制
 
 - `source_type`: file
-- `source_ref`: [`dumpsys_package.txt`](../../backups/headunit_2901149a53300031_20260827_094929/inventory/dumpsys_package.txt#L6482)
-- `content_hash`: `96D1B0FBCF600A51274BB71F4261662B085CDD5FE29971A67AEF2115DF8106E6`
+- `source_ref`: `dumpsys_package.txt`（私有只读采集归档，未提交）
+- `content_hash`: 记录于私有证据清单
 - `repro_command`:
 
 ```powershell
 rg -n -C 4 "CAR_ENGINE_DETAILED|Package \[com\.lynk\.rpmreader\]" `
-  "D:\evcc\backups\headunit_2901149a53300031_20260827_094929\inventory\dumpsys_package.txt"
+  "<private-capture>\inventory\dumpsys_package.txt"
 ```
 
 - `raw_excerpt`: `CAR_ENGINE_DETAILED` 为 `signature|privileged`；RPM Reader 只获得 `CAR_POWERTRAIN`。
@@ -497,29 +509,29 @@ rg -n -C 4 "CAR_ENGINE_DETAILED|Package \[com\.lynk\.rpmreader\]" `
 ### E-007 ECarX AIDL 存在 SELinux 可访问性风险
 
 - `source_type`: log
-- `source_ref`: [`logcat_all.txt`](../../backups/headunit_2901149a53300031_20260827_094929/inventory/logcat_all.txt#L80416)
-- `content_hash`: `E1D7D6DB0AFF695F6BE0ACC8CE11D6D8FC378AF41CBF0858B8B9C9E34DEC5B72`
+- `source_ref`: `logcat_all.txt`（私有只读采集归档，未提交）
+- `content_hash`: 记录于私有证据清单
 - `repro_command`:
 
 ```powershell
 rg -n "name=ecarxcar_service" `
-  "D:\evcc\backups\headunit_2901149a53300031_20260827_094929\inventory\logcat_all.txt"
+  "<private-capture>\inventory\logcat_all.txt"
 ```
 
 - `raw_excerpt`: UID 10155、`untrusted_app` 查询 `ecarxcar_service` 时产生 `{ find }` 拒绝，日志标记 `permissive=1`。
 
 ## Findings
 
-### F-001 APVP 版本耦合来自丢弃动态发现 ID
+### F-001 APVP 固定 ID 版本耦合已经修复
 
 - `severity`: n/a_re
 - `category`: design
-- `status`: validated
+- `status`: remediated
 - `evidence_ids`: E-001, E-002
-- `location`: `ApvpGrpcRpmClient.activateTransfer()` 与 `ApvpSignalCodec.isSignalConfig()`
-- `impact`: 信号名称不变但 ID 改变时，APK 仍可能向旧 ID 发起请求。
+- `location`: `ApvpGrpcRpmClient.activateTransfer()`、`ApvpSignalCodec.decodeSignalConfigIdentity()` 与 `isEngineRpmReading(reading, expected)`
+- `impact`: 实施前在信号名称不变但 ID 改变时，APK 可能向旧 ID 发起请求；当前主路径使用配置返回的真实身份。
 - `confidence`: high
-- `remediation`: 解析并保存完整 `SignalConfig`，使用实际 `SignalIdentify`。
+- `remediation`: 已完成——解析并保存完整 `SignalIdentify`，读取请求和响应校验均使用实际身份；第三个模拟 ID 和实车 `0x12600597` 已验证。
 
 ### F-002 APVP 已具备不依赖固定 ID 的协议条件
 
@@ -563,7 +575,7 @@ rg -n "name=ecarxcar_service" `
 - `location`: 目标架构
 - `impact`: ID、transfer 和接口可用性变化可在运行时吸收；破坏性协议或权限变化仍有剩余风险。
 - `confidence`: high
-- `remediation`: 按本文四阶段实施，并用测试矩阵验证。
+- `remediation`: 第一阶段已经完成；继续实施第二至第四阶段，并用测试矩阵验证流式健康管理、多源切换和版本指纹失效。
 
 ## Path
 
@@ -590,20 +602,26 @@ rg -n "name=ecarxcar_service" `
 | 2026-08-27 | 完成车机只读 inventory、权限、端口和日志整理。 |
 | 2026-08-27 | 验证 RPM Reader 通过 APVP 成功执行 `setReady` 并读取 `EngNSafeEngN`。 |
 | 2026-08-27 | 对照参考 APK，还原 APVP 配置枚举、真实身份解码和流式订阅能力。 |
-| 2026-08-27 | 确认当前代码动态发现后仍发送固定 ID，形成跨版本根因。 |
+| 2026-08-27 | 确认实施前代码动态发现后仍发送固定 ID，形成跨版本根因。 |
 | 2026-08-27 | 完成运行时能力探测、多源后备、缓存失效和兼容画像方案。 |
+| 2026-08-27 | 完成第一阶段改造：保存动态 `SignalIdentity`，读取请求和响应校验绑定实际身份。 |
+| 2026-08-27 | 通过第三个模拟 ID 单元测试，并在目标车机验证动态 `0x12600597` 的非零转速到 0 的变化。 |
 
-## 验收标准
+## 验收状态
 
-方案实施后应同时满足：
+第一阶段已经满足：
 
-- APK 中不再需要按 Flyme/OTA 版本增加 APVP RPM ID 分支。
-- 修改测试配置中的 ID 后，应用自动使用新 ID。
-- APVP transfer 改变不影响信号定位。
-- 标准 Car API 可用时能被自动选择，不可用时不会阻塞 APVP。
-- 0 rpm 不被误判为失败。
-- 流式接口不可用时自动降级为轮询。
-- OTA 指纹改变后自动重新发现，不复用旧映射。
-- ECarX AIDL 被拒绝时安全退出该候选，不绕过系统权限。
-- Root 只在用户明确授权后启用。
-- 日志能够解释“发现了什么、选择了什么、为什么切换”，且不记录个人数据。
+- [x] APVP 主路径不再需要按 Flyme/OTA 版本增加 RPM ID 分支。
+- [x] 第三个模拟 ID 可以按名称解析并保留，响应使用同一次发现的身份校验。
+- [x] transfer 通过运行时枚举获得，不依赖固定的 `268435456`。
+- [x] 实车使用动态发现的 `0x12600597` 读到非零转速并最终回到合法的 0 rpm。
+- [x] 日志记录发现的 transfer、信号 ID 和名称，不记录原始设备标识或个人数据。
+
+完整目标架构仍需满足：
+
+- [ ] 标准 Car API 可用时能被自动选择，不可用时不会阻塞 APVP。
+- [ ] 流式接口不可用时自动降级为轮询。
+- [ ] OTA 指纹改变后自动重新发现，不复用旧映射。
+- [ ] ECarX AIDL 被拒绝时安全退出该候选，不绕过系统权限。
+- [ ] Root 只在用户明确授权后启用。
+- [ ] 日志能够解释多数据源“发现了什么、选择了什么、为什么切换”。

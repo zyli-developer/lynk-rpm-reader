@@ -22,6 +22,8 @@ public final class RpmProtoDecoderTest {
         decodesApvpPackedFloat();
         rejectsApvpResponseWithoutFloat();
         decodesApvpTransferIdsAndConfig();
+        decodesDiscoveredSignalIdentity();
+        validatesReadingAgainstDiscoveredIdentity();
         mapsGaugeMovement();
         clampsGaugeRange();
         usesConfiguredPowerPeakScale();
@@ -30,7 +32,7 @@ public final class RpmProtoDecoderTest {
         formatsInstrumentReadout();
         keepsInstrumentLocationExclusive();
         validatesStartupAnimationTimeline();
-        System.out.println("RPM logic tests passed: " + passed + "/17");
+        System.out.println("RPM logic tests passed: " + passed + "/19");
     }
 
     private void convertsCarApiFloatRpm() {
@@ -110,6 +112,31 @@ public final class RpmProtoDecoderTest {
         check(ids.size() == 2 && ids.get(0) == 41L && ids.get(1) == 99L, "transfer IDs");
         byte[] config = bytesField(1, ApvpSignalCodec.encodeIdentify(308282774, "EngNSafeEngN"));
         check(ApvpSignalCodec.isSignalConfig(config, 308282774, "EngNSafeEngN"), "RPM config");
+        pass();
+    }
+
+    private void decodesDiscoveredSignalIdentity() throws Exception {
+        byte[] config = bytesField(1, ApvpSignalCodec.encodeIdentify(
+                308282776, ApvpSignalCodec.ENGINE_RPM_NAME));
+        ApvpSignalCodec.SignalIdentity identity =
+                ApvpSignalCodec.decodeSignalConfigIdentity(config);
+        check(identity != null && identity.id == 308282776,
+                "discovered signal ID is preserved");
+        check(ApvpSignalCodec.ENGINE_RPM_NAME.equals(identity.name)
+                        && ApvpSignalCodec.isEngineRpmConfig(identity),
+                "semantic RPM name accepts a version-specific ID");
+        pass();
+    }
+
+    private void validatesReadingAgainstDiscoveredIdentity() {
+        ApvpSignalCodec.SignalIdentity identity = new ApvpSignalCodec.SignalIdentity(
+                308282776, ApvpSignalCodec.ENGINE_RPM_NAME);
+        check(ApvpSignalCodec.isEngineRpmReading(new ApvpSignalCodec.Reading(
+                        308282776, ApvpSignalCodec.ENGINE_RPM_NAME, 0, 1200.0f), identity),
+                "response matches discovered identity");
+        check(!ApvpSignalCodec.isEngineRpmReading(new ApvpSignalCodec.Reading(
+                        308282777, ApvpSignalCodec.ENGINE_RPM_NAME, 0, 1200.0f), identity),
+                "response with a different ID is rejected");
         pass();
     }
 

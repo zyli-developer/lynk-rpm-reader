@@ -12,6 +12,16 @@ final class ApvpSignalCodec {
     static final int ENGINE_RPM_ID_FLYME_AUTO_25 = 308282775; // 0x12600597
     static final String ENGINE_RPM_NAME = "EngNSafeEngN";
 
+    static final class SignalIdentity {
+        final int id;
+        final String name;
+
+        SignalIdentity(int id, String name) {
+            this.id = id;
+            this.name = name;
+        }
+    }
+
     static final class Reading {
         final int id;
         final String name;
@@ -34,6 +44,14 @@ final class ApvpSignalCodec {
                 || reading.id == ENGINE_RPM_ID_FLYME_AUTO_25;
         boolean knownName = reading.name.isEmpty() || ENGINE_RPM_NAME.equals(reading.name);
         return knownId && knownName;
+    }
+
+    static boolean isEngineRpmReading(Reading reading, SignalIdentity expected) {
+        if (expected == null || !isEngineRpmConfig(expected)) return false;
+        boolean idMatches = reading.id == 0 || reading.id == expected.id;
+        boolean nameMatches = reading.name.isEmpty() || expected.name.isEmpty()
+                || expected.name.equals(reading.name);
+        return idMatches && nameMatches;
     }
 
     static byte[] encodeIdentify(int id, String name) {
@@ -121,12 +139,25 @@ final class ApvpSignalCodec {
 
     /** SignalConfig field 1 is its nested SignalIdentify. */
     static boolean isSignalConfig(byte[] data, int wantedId, String wantedName) throws IOException {
+        SignalIdentity identity = decodeSignalConfigIdentity(data);
+        return identity != null && (identity.id == wantedId || wantedName.equals(identity.name));
+    }
+
+    static SignalIdentity decodeSignalConfigIdentity(byte[] data) throws IOException {
         byte[] identify = ProtoReader.firstBytes(data, 1);
-        if (identify == null) return false;
+        if (identify == null) return null;
         int id = ProtoReader.firstInt32(identify, 1, 0);
         byte[] nameBytes = ProtoReader.firstBytes(identify, 2);
         String name = nameBytes == null ? "" : new String(nameBytes, StandardCharsets.UTF_8);
-        return id == wantedId || wantedName.equals(name);
+        return new SignalIdentity(id, name);
+    }
+
+    static boolean isEngineRpmConfig(SignalIdentity identity) {
+        if (identity == null) return false;
+        if (ENGINE_RPM_NAME.equals(identity.name)) return identity.id > 0;
+        return identity.name.isEmpty()
+                && (identity.id == ENGINE_RPM_ID
+                || identity.id == ENGINE_RPM_ID_FLYME_AUTO_25);
     }
 
     private static void writeVarint(ByteArrayOutputStream out, long value) {

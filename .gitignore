@@ -23,6 +23,8 @@ release-signing.properties
 *.aab
 *.hprof
 *.log
+__pycache__/
+*.pyc
 
 # OS
 .DS_Store
