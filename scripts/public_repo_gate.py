@@ -15,6 +15,15 @@ from urllib.parse import unquote
 
 MAX_TEXT_BYTES = 2 * 1024 * 1024
 
+ALLOWED_BINARY_PATH_PATTERNS: Sequence[re.Pattern[str]] = (
+    re.compile(r"^gradle/wrapper/gradle-wrapper\.jar$", re.IGNORECASE),
+    re.compile(r"^docs/assets/[^/]+\.(?:png|jpe?g|webp)$", re.IGNORECASE),
+    re.compile(
+        r"^rpmreader/src/main/res/mipmap-[^/]+/[^/]+\.png$",
+        re.IGNORECASE,
+    ),
+)
+
 BLOCKED_PATH_PATTERNS: Sequence[tuple[re.Pattern[str], str]] = (
     (
         re.compile(
@@ -132,16 +141,41 @@ def text_findings(root: Path, path: Path, text: str) -> Iterable[Finding]:
     yield from markdown_findings(root, path, text)
 
 
-def read_text(path: Path) -> str | None:
-    if not path.is_file() or path.stat().st_size > MAX_TEXT_BYTES:
-        return None
-    data = path.read_bytes()
-    if b"\0" in data:
-        return None
+def is_allowed_binary(relative_path: str) -> bool:
+    normalized = relative_path.replace("\\", "/")
+    return any(pattern.fullmatch(normalized) for pattern in ALLOWED_BINARY_PATH_PATTERNS)
+
+
+def decode_text(data: bytes) -> str | None:
+    if data.startswith((b"\xff\xfe", b"\xfe\xff")):
+        try:
+            return data.decode("utf-16")
+        except UnicodeDecodeError:
+            return None
     try:
-        return data.decode("utf-8")
+        return data.decode("utf-8-sig")
     except UnicodeDecodeError:
         return None
+
+
+def file_findings(root: Path, path: Path) -> Iterable[Finding]:
+    if not path.is_file():
+        return
+    relative = str(path.relative_to(root)).replace("\\", "/")
+    if path.stat().st_size > MAX_TEXT_BYTES:
+        yield Finding(
+            relative,
+            None,
+            f"file exceeds the public-review size limit ({MAX_TEXT_BYTES} bytes)",
+        )
+        return
+    data = path.read_bytes()
+    text = decode_text(data)
+    if text is not None and (b"\0" not in data or data.startswith((b"\xff\xfe", b"\xfe\xff"))):
+        yield from text_findings(root, path, text)
+        return
+    if not is_allowed_binary(relative):
+        yield Finding(relative, None, "unreviewed binary or unsupported text encoding")
 
 
 def scan_repository(root: Path) -> list[Finding]:
@@ -149,9 +183,7 @@ def scan_repository(root: Path) -> list[Finding]:
     for path in repository_files(root):
         relative = str(path.relative_to(root)).replace("\\", "/")
         findings.extend(path_findings(relative))
-        text = read_text(path)
-        if text is not None:
-            findings.extend(text_findings(root, path, text))
+        findings.extend(file_findings(root, path))
     return sorted(set(findings), key=lambda item: (item.path, item.line or 0, item.reason))
 
 
