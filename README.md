@@ -20,7 +20,7 @@
 
 LynkRPMReader 在车机横屏上实时显示发动机转速，并提供启动扫表动画。应用优先读取兼容车机提供的本地 APVP 信号，在不可用时依次尝试标准 Android Car API 和可选的 Root Car API 通道。
 
-当前源码包名为 `com.lynk.rpmreader`，版本为 `1.9.0`（`versionCode 16`）。
+当前源码包名为 `com.lynk.rpmreader`，版本为 `1.9.1`（`versionCode 17`）。
 
 本项目为非官方社区项目，与领克、吉利、魅族及其关联公司无隶属、授权或背书关系。品牌及产品名称仅用于如实说明已验证的设备兼容性。
 

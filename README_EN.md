@@ -20,7 +20,7 @@
 
 LynkRPMReader displays live engine RPM on a landscape head-unit screen and includes a startup gauge-sweep animation. It first reads the local APVP signal exposed by a compatible head unit, then falls back to the standard Android Car API and the optional Root Car API path when necessary.
 
-The current source uses package name `com.lynk.rpmreader`, version `1.9.0`, and `versionCode 16`.
+The current source uses package name `com.lynk.rpmreader`, version `1.9.1`, and `versionCode 17`.
 
 This is an unofficial community project. It is not affiliated with, authorized by, or endorsed by Lynk & Co, Geely, Meizu, or any of their affiliates. Brand and product names are used solely to identify verified device compatibility.
 

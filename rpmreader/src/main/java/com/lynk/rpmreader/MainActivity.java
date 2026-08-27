@@ -152,6 +152,9 @@ public final class MainActivity extends Activity implements VehicleRpmClient.Lis
         divider.setBackgroundColor(Color.rgb(29, 56, 68));
         root.addView(divider, new LinearLayout.LayoutParams(dp(1), -1));
 
+        ScrollView panelScroll = new ScrollView(this);
+        panelScroll.setFillViewport(true);
+        panelScroll.setVerticalScrollBarEnabled(false);
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setPadding(dp(28), dp(10), 0, dp(6));
@@ -170,6 +173,7 @@ public final class MainActivity extends Activity implements VehicleRpmClient.Lis
         statusView = label("正在连接车辆", 25, Color.WHITE, Typeface.BOLD);
         statusRow.addView(statusView, new LinearLayout.LayoutParams(0, -2, 1f));
         panel.addView(statusRow);
+        addDisplayLocationControls(panel);
 
         panel.addView(infoBlock("车辆链路", "APVP / VDDM / 10 HZ"));
         panel.addView(infoBlock("动力总成", "BHE15-BFZ · 3DHT EVO"));
@@ -189,10 +193,33 @@ public final class MainActivity extends Activity implements VehicleRpmClient.Lis
         buttonParams.topMargin = dp(12);
         panel.addView(reconnect, buttonParams);
 
+        TextView logTitle = label("诊断记录", 20, MUTED, Typeface.BOLD);
+        logTitle.setLetterSpacing(0.14f);
+        LinearLayout.LayoutParams logTitleParams = new LinearLayout.LayoutParams(-1, -2);
+        logTitleParams.topMargin = dp(20);
+        panel.addView(logTitle, logTitleParams);
+
+        logView = label("", 20, Color.rgb(172, 197, 207), Typeface.NORMAL);
+        logView.setTypeface(Typeface.MONOSPACE);
+        logView.setLineSpacing(dp(4), 1f);
+        logView.setMovementMethod(new ScrollingMovementMethod());
+        ScrollView scroll = new ScrollView(this);
+        scroll.setVerticalScrollBarEnabled(false);
+        scroll.addView(logView);
+        panel.addView(scroll, new LinearLayout.LayoutParams(-1, dp(180)));
+        panelScroll.addView(panel, new ScrollView.LayoutParams(-1, -2));
+        root.addView(panelScroll, new LinearLayout.LayoutParams(0, -1, 1f));
+        shell.addView(root, new FrameLayout.LayoutParams(-1, -1));
+        startupOverlay = new StartupOverlayView(this);
+        shell.addView(startupOverlay, new FrameLayout.LayoutParams(-1, -1));
+        setContentView(shell);
+    }
+
+    private void addDisplayLocationControls(LinearLayout panel) {
         TextView locationTitle = label("仪表转速显示位置", 18, MUTED, Typeface.BOLD);
         locationTitle.setLetterSpacing(0.08f);
         LinearLayout.LayoutParams locationTitleParams = new LinearLayout.LayoutParams(-1, -2);
-        locationTitleParams.topMargin = dp(10);
+        locationTitleParams.bottomMargin = dp(6);
         panel.addView(locationTitle, locationTitleParams);
 
         displayLocationGroup = new RadioGroup(this);
@@ -214,33 +241,12 @@ public final class MainActivity extends Activity implements VehicleRpmClient.Lis
                 new RadioGroup.LayoutParams(0, dp(54), 1.45f));
         displayLocationGroup.setOnCheckedChangeListener((group, checkedId) -> {
             if (suppressLocationCallback) return;
-            RpmDisplayLocation location = locationForCheckedId(checkedId);
-            selectDisplayLocation(location);
+            selectDisplayLocation(locationForCheckedId(checkedId));
         });
         LinearLayout.LayoutParams locationParams = new LinearLayout.LayoutParams(-1, dp(54));
-        locationParams.topMargin = dp(6);
+        locationParams.bottomMargin = dp(12);
         panel.addView(displayLocationGroup, locationParams);
         refreshDisplayLocationControls();
-
-        TextView logTitle = label("诊断记录", 20, MUTED, Typeface.BOLD);
-        logTitle.setLetterSpacing(0.14f);
-        LinearLayout.LayoutParams logTitleParams = new LinearLayout.LayoutParams(-1, -2);
-        logTitleParams.topMargin = dp(20);
-        panel.addView(logTitle, logTitleParams);
-
-        logView = label("", 20, Color.rgb(172, 197, 207), Typeface.NORMAL);
-        logView.setTypeface(Typeface.MONOSPACE);
-        logView.setLineSpacing(dp(4), 1f);
-        logView.setMovementMethod(new ScrollingMovementMethod());
-        ScrollView scroll = new ScrollView(this);
-        scroll.setVerticalScrollBarEnabled(false);
-        scroll.addView(logView);
-        panel.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1f));
-        root.addView(panel, new LinearLayout.LayoutParams(0, -1, 1f));
-        shell.addView(root, new FrameLayout.LayoutParams(-1, -1));
-        startupOverlay = new StartupOverlayView(this);
-        shell.addView(startupOverlay, new FrameLayout.LayoutParams(-1, -1));
-        setContentView(shell);
     }
 
     private void playStartupAnimation() {
