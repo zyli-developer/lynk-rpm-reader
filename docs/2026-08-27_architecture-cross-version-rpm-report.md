@@ -398,7 +398,7 @@ ECarX AIDL 的探测步骤应当是：
 
 ## Evidence
 
-以下证据均来自当前工作区和既有只读车机备份。SHA-256 用于确认后续复核时引用的文件版本。
+以下结论来自仓库源码和经授权取得的只读车机证据。公共仓库只保留可复现步骤和脱敏结论；原始日志、设备清单、反编译产物及其哈希保存在私有证据归档中，不随仓库提交。
 
 ### E-001 当前读取请求仍使用固定 APVP ID
 
@@ -411,8 +411,8 @@ ECarX AIDL 的探测步骤应当是：
 
 ```powershell
 rg -n "ENGINE_RPM_ID|encodeIdentify|isSignalConfig" `
-  "D:\evcc\lynk-rpm-reader\rpmreader\src\main\java\com\lynk\rpmreader\ApvpGrpcRpmClient.java" `
-  "D:\evcc\lynk-rpm-reader\rpmreader\src\main\java\com\lynk\rpmreader\ApvpSignalCodec.java"
+  "rpmreader\src\main\java\com\lynk\rpmreader\ApvpGrpcRpmClient.java" `
+  "rpmreader\src\main\java\com\lynk\rpmreader\ApvpSignalCodec.java"
 ```
 
 - `raw_excerpt`: 配置匹配只返回布尔值；读取请求固定传入 `ENGINE_RPM_ID`。
@@ -420,13 +420,13 @@ rg -n "ENGINE_RPM_ID|encodeIdentify|isSignalConfig" `
 ### E-002 当前车机 APVP 配置包含名称、真实 ID 和类型信息
 
 - `source_type`: file
-- `source_ref`: [`dx11_cn_apvp_signal_config.json`](../../lynk/dx11_cn_apvp_signal_config.json#L43128)
-- `content_hash`: `7FFEE93DFA86CA283BB4F077F9E809572B95D12BBEB7450FAEEF5CB160234B93`
+- `source_ref`: `dx11_cn_apvp_signal_config.json`（私有证据归档，未提交）
+- `content_hash`: 记录于私有证据清单
 - `repro_command`:
 
 ```powershell
 rg -n -A 8 '"name": "EngNSafeEngN"' `
-  "D:\evcc\lynk\dx11_cn_apvp_signal_config.json"
+  "<private-config>\dx11_cn_apvp_signal_config.json"
 ```
 
 - `raw_excerpt`: `EngNSafeEngN` 的值为 `308282774`，模块为 `VDDM`，只读，值类型为 Float。
@@ -434,13 +434,13 @@ rg -n -A 8 '"name": "EngNSafeEngN"' `
 ### E-003 参考 APK 提供完整发现和流式读取协议
 
 - `source_type`: file
-- `source_ref`: [`C1774u.java`](../../app/src/main/java/p000/C1774u.java#L75)
-- `content_hash`: `2E67F4ADEA75D1EDB599CCCF0661F404FBF601E32DB15B2789A8D8DED02580FC`
+- `source_ref`: `C1774u.java`（私有参考 APK 反编译归档，未提交）
+- `content_hash`: 记录于私有证据清单
 - `repro_command`:
 
 ```powershell
 rg -n "getAllTransfer|getTransferSignalConfig|setReady|readSignal|listenerSignalStream" `
-  "D:\evcc\app\src\main\java\p000\C1774u.java"
+  "<private-reference-source>\C1774u.java"
 ```
 
 - `raw_excerpt`: 存在 `getAllTransfer`、`getTransferSignalConfig`、`setReady`、`readSignal` 和 `listenerSignalStream`。
@@ -448,16 +448,14 @@ rg -n "getAllTransfer|getTransferSignalConfig|setReady|readSignal|listenerSignal
 ### E-004 参考 APK 会解码真实 SignalIdentify 并用于订阅
 
 - `source_type`: file
-- `source_ref`: [`nk3.java`](../../app/src/main/java/p000/nk3.java#L839)、[`C0059bf.java`](../../app/src/main/java/p000/C0059bf.java#L923)
-- `content_hash`:
-  - `nk3.java`: `3ED625664F0189FA0DA8D2752072DA2643F3E190B897FB39BF67C5BC73F3DFED`
-  - `C0059bf.java`: `4BCF8CF2AB528AED5E73711B0D719483FA403D9FD476BF555BC0C0C705FD0A02`
+- `source_ref`: `nk3.java`、`C0059bf.java`（私有参考 APK 反编译归档，未提交）
+- `content_hash`: 记录于私有证据清单
 - `repro_command`:
 
 ```powershell
 rg -n "m632l1|m633lI|new C0706me|m638ll|new be4" `
-  "D:\evcc\app\src\main\java\p000\nk3.java" `
-  "D:\evcc\app\src\main\java\p000\C0059bf.java"
+  "<private-reference-source>\nk3.java" `
+  "<private-reference-source>\C0059bf.java"
 ```
 
 - `raw_excerpt`: 配置解码保留 ID 和名称，订阅请求从配置映射中取回名称。
@@ -465,17 +463,15 @@ rg -n "m632l1|m633lI|new C0706me|m638ll|new be4" `
 ### E-005 实车 APVP 服务和读取闭环已成立
 
 - `source_type`: log
-- `source_ref`: [`sockets.txt`](../../backups/headunit_2901149a53300031_20260827_094929/inventory/sockets.txt#L125)、[`logcat_all.txt`](../../backups/headunit_2901149a53300031_20260827_094929/inventory/logcat_all.txt#L161615)
-- `content_hash`:
-  - `sockets.txt`: `259C9303C4E8902A533433951BF1C51809948503795EC3AD76B54C96B7EC36D7`
-  - `logcat_all.txt`: `E1D7D6DB0AFF695F6BE0ACC8CE11D6D8FC378AF41CBF0858B8B9C9E34DEC5B72`
+- `source_ref`: `sockets.txt`、`logcat_all.txt`（私有只读采集归档，未提交）
+- `content_hash`: 记录于私有证据清单
 - `repro_command`:
 
 ```powershell
 rg -n "40005|40007" `
-  "D:\evcc\backups\headunit_2901149a53300031_20260827_094929\inventory\sockets.txt"
+  "<private-capture>\inventory\sockets.txt"
 rg -n "setReady transfer|APVP EngNSafeEngN" `
-  "D:\evcc\backups\headunit_2901149a53300031_20260827_094929\inventory\logcat_all.txt"
+  "<private-capture>\inventory\logcat_all.txt"
 ```
 
 - `raw_excerpt`: 40005/40007 在 loopback 监听；`setReady transfer(268435456)` 成功；应用随后读到 `EngNSafeEngN=0.0 rpm`。
@@ -483,13 +479,13 @@ rg -n "setReady transfer|APVP EngNSafeEngN" `
 ### E-006 标准转速属性受特权权限限制
 
 - `source_type`: file
-- `source_ref`: [`dumpsys_package.txt`](../../backups/headunit_2901149a53300031_20260827_094929/inventory/dumpsys_package.txt#L6482)
-- `content_hash`: `96D1B0FBCF600A51274BB71F4261662B085CDD5FE29971A67AEF2115DF8106E6`
+- `source_ref`: `dumpsys_package.txt`（私有只读采集归档，未提交）
+- `content_hash`: 记录于私有证据清单
 - `repro_command`:
 
 ```powershell
 rg -n -C 4 "CAR_ENGINE_DETAILED|Package \[com\.lynk\.rpmreader\]" `
-  "D:\evcc\backups\headunit_2901149a53300031_20260827_094929\inventory\dumpsys_package.txt"
+  "<private-capture>\inventory\dumpsys_package.txt"
 ```
 
 - `raw_excerpt`: `CAR_ENGINE_DETAILED` 为 `signature|privileged`；RPM Reader 只获得 `CAR_POWERTRAIN`。
@@ -497,13 +493,13 @@ rg -n -C 4 "CAR_ENGINE_DETAILED|Package \[com\.lynk\.rpmreader\]" `
 ### E-007 ECarX AIDL 存在 SELinux 可访问性风险
 
 - `source_type`: log
-- `source_ref`: [`logcat_all.txt`](../../backups/headunit_2901149a53300031_20260827_094929/inventory/logcat_all.txt#L80416)
-- `content_hash`: `E1D7D6DB0AFF695F6BE0ACC8CE11D6D8FC378AF41CBF0858B8B9C9E34DEC5B72`
+- `source_ref`: `logcat_all.txt`（私有只读采集归档，未提交）
+- `content_hash`: 记录于私有证据清单
 - `repro_command`:
 
 ```powershell
 rg -n "name=ecarxcar_service" `
-  "D:\evcc\backups\headunit_2901149a53300031_20260827_094929\inventory\logcat_all.txt"
+  "<private-capture>\inventory\logcat_all.txt"
 ```
 
 - `raw_excerpt`: UID 10155、`untrusted_app` 查询 `ecarxcar_service` 时产生 `{ find }` 拒绝，日志标记 `permissive=1`。

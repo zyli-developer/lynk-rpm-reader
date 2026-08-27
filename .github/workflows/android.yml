@@ -2,13 +2,25 @@ name: Android CI
 
 on:
   push:
+    branches:
+      - main
   pull_request:
 
 permissions:
   contents: read
 
 jobs:
+  public-repo-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Public repository gate tests
+        run: python3 -m unittest discover -s scripts/tests -p 'test_public_repo_gate.py'
+      - name: Public repository gate
+        run: python3 scripts/public_repo_gate.py
+
   build:
+    needs: public-repo-gate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

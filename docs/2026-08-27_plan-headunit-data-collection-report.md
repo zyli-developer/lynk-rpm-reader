@@ -88,9 +88,9 @@ flowchart TD
 以下 PowerShell 命令只在本机创建采集目录并查询设备：
 
 ```powershell
-$adbExe = 'D:\AndroidWatch_ADB_ToolBox\adb\adb.exe'
+$adbExe = if ($env:ADB_EXE) { $env:ADB_EXE } else { 'adb' }
 $captureStamp = Get-Date -Format 'yyyyMMdd_HHmmss'
-$captureRoot = "D:\evcc\backups\headunit_followup_$captureStamp"
+$captureRoot = Join-Path $env:TEMP "lynk-rpm-capture_$captureStamp"
 New-Item -ItemType Directory -Path $captureRoot | Out-Null
 
 & $adbExe devices -l |
