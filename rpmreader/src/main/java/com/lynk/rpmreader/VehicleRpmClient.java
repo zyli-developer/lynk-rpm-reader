@@ -5,7 +5,7 @@ import android.util.Log;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/** Uses APVP for display data while probing the standard AAOS property in parallel. */
+/** Uses the vehicle's APVP signal first, with standard AAOS paths as compatibility fallbacks. */
 final class VehicleRpmClient implements AutoCloseable {
     private static final String TAG = "RpmReader";
     interface Listener {
@@ -17,10 +17,8 @@ final class VehicleRpmClient implements AutoCloseable {
     private final Context context;
     private final Listener listener;
     private final AtomicBoolean closed = new AtomicBoolean();
-    private final AtomicBoolean fallingBackFromApvp = new AtomicBoolean();
     private final Object lock = new Object();
     private AutoCloseable delegate;
-    private AutoCloseable diagnosticDelegate;
 
     VehicleRpmClient(Context context, Listener listener) {
         this.context = context.getApplicationContext();
@@ -29,57 +27,18 @@ final class VehicleRpmClient implements AutoCloseable {
 
     void start() {
         closed.set(false);
-        fallingBackFromApvp.set(false);
         listener.onLog("读取顺序：车辆 APVP → Android Car API → Root Car API");
-        listener.onLog("APVP 用于显示；标准 ENGINE_RPM 同时进行只读诊断");
+        listener.onLog("优先使用动态发现的 APVP readSignal，标准 ENGINE_RPM 作为后备");
         Log.i(TAG, "Starting APVP gRPC RPM path");
         ApvpGrpcRpmClient apvpClient = new ApvpGrpcRpmClient(listener);
         synchronized (lock) {
             delegate = apvpClient;
         }
         apvpClient.start(this::fallbackToCar);
-        startCarApiDiagnostic();
-    }
-
-    private void startCarApiDiagnostic() {
-        Listener diagnosticListener = new Listener() {
-            @Override public void onStatus(String status, boolean error) {
-                // APVP remains responsible for the user-visible status.
-            }
-
-            @Override public void onLog(String message) {
-                Log.i(TAG, "Parallel Car API diagnostic: " + message);
-            }
-
-            @Override public void onRpm(int rpm, int status) {
-                // CarApiRpmClient writes value/status to logcat without replacing APVP display data.
-            }
-        };
-        CarApiRpmClient diagnosticClient = new CarApiRpmClient(context, diagnosticListener);
-        synchronized (lock) {
-            if (closed.get() || fallingBackFromApvp.get()) {
-                diagnosticClient.close();
-                return;
-            }
-            diagnosticDelegate = diagnosticClient;
-        }
-        Log.i(TAG, "Starting parallel Android Car API ENGINE_RPM diagnostic");
-        diagnosticClient.start(error -> {
-            synchronized (lock) {
-                if (diagnosticDelegate == diagnosticClient) {
-                    diagnosticDelegate = null;
-                }
-            }
-            diagnosticClient.close();
-            if (closed.get() || fallingBackFromApvp.get()) return;
-            Log.w(TAG, "Parallel Android Car API diagnostic failed: "
-                    + error.getClass().getSimpleName() + ": "
-                    + String.valueOf(error.getMessage()), error);
-        });
     }
 
     private void fallbackToCar(Throwable apvpError) {
-        if (closed.get() || !fallingBackFromApvp.compareAndSet(false, true)) return;
+        if (closed.get()) return;
         listener.onLog("车辆 APVP 不可用：" + apvpError.getClass().getSimpleName()
                 + ": " + String.valueOf(apvpError.getMessage()));
         Log.w(TAG, "Falling back to Android Car API", apvpError);
@@ -89,8 +48,6 @@ final class VehicleRpmClient implements AutoCloseable {
                 carClient.close();
                 return;
             }
-            closeQuietly(diagnosticDelegate);
-            diagnosticDelegate = null;
             closeQuietly(delegate);
             delegate = carClient;
         }
@@ -132,8 +89,6 @@ final class VehicleRpmClient implements AutoCloseable {
         synchronized (lock) {
             closeQuietly(delegate);
             delegate = null;
-            closeQuietly(diagnosticDelegate);
-            diagnosticDelegate = null;
         }
     }
 

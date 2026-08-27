@@ -18,24 +18,24 @@
 
 | 项目 | 已确认结果 | 证据 |
 | --- | --- | --- |
-| 车机系统 | Android 11，SDK 30 | 既有车机备份 `inventory` |
+| 车机系统 | Android 11，SDK 30 | 私有本地采集归档（未提交） |
 | 标准转速属性 | `ENGINE_RPM = 291504901 / 0x11600305` | [CarApiRpmClient.java](../rpmreader/src/main/java/com/lynk/rpmreader/CarApiRpmClient.java) |
-| 标准属性权限 | `CAR_ENGINE_DETAILED` 为 `signature\|privileged` | [dumpsys_package.txt](../../backups/headunit_2901149a53300031_20260827_094929/inventory/dumpsys_package.txt) |
+| 标准属性权限 | `CAR_ENGINE_DETAILED` 为 `signature\|privileged` | 私有本地采集归档（未提交） |
 | RPM Reader 实际权限 | 获得 `CAR_POWERTRAIN`，未获得 `CAR_ENGINE_DETAILED` | 同上 |
-| APVP 静态配置基线 | `EngNSafeEngN = 308282774 / 0x12600596`，VDDM、只读 | [dx11_cn_apvp_signal_config.json](../../lynk/dx11_cn_apvp_signal_config.json) |
-| APVP 车机实际配置 | `EngNSafeEngN = 308282775 / 0x12600597`，transfer `268435456` | [rpmreader_after_update_logcat_filtered.txt](../../backups/headunit_followup_20260827_121919/deployment/rpmreader_after_update_logcat_filtered.txt) |
+| APVP 静态配置基线 | `EngNSafeEngN = 308282774 / 0x12600596`，VDDM、只读 | 私有本地采集归档（未提交） |
+| APVP 车机实际配置 | `EngNSafeEngN = 308282775 / 0x12600597`，transfer `268435456` | 私有本地采集归档（未提交） |
 | APVP 服务 | 本地 gRPC `40005` 读取、`40007` 配置和 `setReady` | [ApvpGrpcRpmClient.java](../rpmreader/src/main/java/com/lynk/rpmreader/ApvpGrpcRpmClient.java) |
-| 旧版实测 | APVP 曾记录约 `1292–1303 RPM`，标准属性此前固定为 0 | [旧版 README](../../rpmreader/README.md) |
+| 旧版实测 | APVP 曾记录约 `1292–1303 RPM`，标准属性此前固定为 0 | 历史实车记录（私有归档） |
 | 当前待确认 | 标准属性是受权限拦截，还是 VHAL 未接入真实转速 | 后续 P0 采集 |
 | 已确认差异 | 目标车机实际 APVP ID 比静态配置基线增加 1，应用必须使用运行时返回的 ID | E-011、F-005 |
 
 ## 2026-08-27 首轮采集与诊断部署执行记录
 
-本轮证据目录为 [`headunit_followup_20260827_121919`](../../backups/headunit_followup_20260827_121919)。首轮采集只执行只读查询、启动既有 RPM Reader、截取该应用界面和定向复制已确认的系统文件。随后经用户明确授权，使用与现装版本相同的发布证书对诊断 APK 签名，并通过 `adb install -r` 覆盖安装；未卸载应用、未清除应用数据、未使用 root、未清空日志，也未改变车辆属性。
+原始日志、截图、反编译产物及设备清单保存在私有本地采集归档中，不随公共仓库提交。首轮采集只执行只读查询、启动既有 RPM Reader、截取该应用界面和定向复制已确认的系统文件。随后经用户明确授权，使用与现装版本相同的发布证书对诊断 APK 签名，并通过 `adb install -r` 覆盖安装；未卸载应用、未清除应用数据、未使用 root、未清空日志，也未改变车辆属性。
 
 | 项目 | 本轮结果 | 状态 |
 | --- | --- | --- |
-| 目标设备 | `2901149a53300031`，`se1000_dx11_slave_car`，ADB `device` | 已确认 |
+| 目标设备 | 领克 DX11 测试车机（设备标识已脱敏） | 已确认 |
 | 运行身份 | `uid=2000(shell)`，SELinux `Permissive`，当前 Android 用户 `11` | 已保存 |
 | 标准 RPM 配置 | `ENGINE_RPM / 0x11600305` 存在；READ、CONTINUOUS、Float/global 编码、1–10 Hz | 已确认 |
 | 普通 APK 权限 | 请求 `CAR_ENGINE_DETAILED`，实际仅授予 `CAR_POWERTRAIN` | 已确认 |
@@ -343,7 +343,7 @@ RPM 主链路完成后，再按使用价值依次调查：
 
 - 标题：车机将 `CAR_ENGINE_DETAILED` 定义为特权权限。
 - 来源类型：file。
-- 来源：[dumpsys_package.txt](../../backups/headunit_2901149a53300031_20260827_094929/inventory/dumpsys_package.txt)。
+- 来源：`dumpsys_package.txt`（私有本地采集归档，未提交）。
 - 关键观察：权限保护级别为 `signature|privileged`。
 - 复现方式：下一次连接后执行 `adb shell dumpsys package com.android.car` 和 `adb shell dumpsys package com.lynk.rpmreader`。
 
@@ -359,7 +359,7 @@ RPM 主链路完成后，再按使用价值依次调查：
 
 - 标题：车机配置存在只读 APVP 转速信号。
 - 来源类型：file。
-- 来源：[dx11_cn_apvp_signal_config.json](../../lynk/dx11_cn_apvp_signal_config.json)。
+- 来源：`dx11_cn_apvp_signal_config.json`（私有本地采集归档，未提交）。
 - 关键观察：`EngNSafeEngN`、`308282774`、`VDDM`、`readOnly=true`。
 - 复现方式：下一轮从实际车机 transfer 配置重新发现名称和 ID。
 
@@ -375,7 +375,7 @@ RPM 主链路完成后，再按使用价值依次调查：
 
 - 标题：当前固件的标准 VHAL 声明了 `ENGINE_RPM`。
 - 来源类型：runtime dump。
-- 来源：[`dumpsys_car_service.txt`](../../backups/headunit_followup_20260827_121919/car/dumpsys_car_service.txt)。
+- 来源：`dumpsys_car_service.txt`（私有本地采集归档，未提交）。
 - 关键观察：`0x11600305 / 291504901`，READ、CONTINUOUS、最小 1 Hz、最大 10 Hz，并由 `PropertyHalService` 处理。
 - 复现方式：执行 `adb shell dumpsys car_service` 并搜索十六进制或十进制属性 ID。
 
@@ -383,7 +383,7 @@ RPM 主链路完成后，再按使用价值依次调查：
 
 - 标题：普通 RPM Reader 当前仍未获得 `CAR_ENGINE_DETAILED`。
 - 来源类型：runtime dump。
-- 来源：[`package_com.lynk.rpmreader.txt`](../../backups/headunit_followup_20260827_121919/car/package_com.lynk.rpmreader.txt)。
+- 来源：`package_com.lynk.rpmreader.txt`（私有本地采集归档，未提交）。
 - 关键观察：Manifest 请求该权限，但 install permissions 中只有 `INTERNET`、`CAR_POWERTRAIN` 和 `ACCESS_NETWORK_STATE`。
 - 复现方式：执行 `adb shell dumpsys package com.lynk.rpmreader`。
 
@@ -391,7 +391,7 @@ RPM 主链路完成后，再按使用价值依次调查：
 
 - 标题：当前 APVP 本地读取链路返回 0 RPM。
 - 来源类型：runtime log and screenshot。
-- 来源：[`rpmreader_after_launch_filtered.txt`](../../backups/headunit_followup_20260827_121919/runtime/rpmreader_after_launch_filtered.txt) 和 [`rpmreader_screen.png`](../../backups/headunit_followup_20260827_121919/runtime/rpmreader_screen.png)。
+- 来源：`rpmreader_after_launch_filtered.txt` 和 `rpmreader_screen.png`（私有本地采集归档，未提交）。
 - 关键观察：`APVP EngNSafeEngN=0.0 rpm, mode=0`，界面显示 `APVP LIVE`。
 - 限制：本轮未独立记录车辆电源状态，不能仅凭 0 RPM 将该样本标记为“熄火”。
 
@@ -399,21 +399,21 @@ RPM 主链路完成后，再按使用价值依次调查：
 
 - 标题：亿咖通 AdaptAPI 内部存在标准 RPM 属性映射，但直接 Provider 受签名权限保护。
 - 来源类型：decompiled APK and package dump。
-- 来源：[`b.java`](../../backups/headunit_followup_20260827_121919/analysis/decompiled/XSFCarService/sources/com/ecarx/sdk/openapi/wrapper/r/car/b.java)、[`AndroidManifest.xml`](../../backups/headunit_followup_20260827_121919/analysis/decompiled/XSFCarService/resources/AndroidManifest.xml) 和 [`package_com_ecarx_eas_carservice.txt`](../../backups/headunit_followup_20260827_121919/packages/package_com_ecarx_eas_carservice.txt)。
+- 来源：反编译的 `b.java`、`AndroidManifest.xml` 和 `package_com_ecarx_eas_carservice.txt`（私有本地采集归档，未提交）。
 - 关键观察：`(3, 1050880)` 映射到 `291504901`；Provider 的 READ/WRITE 权限均为 `signature`，服务运行于 `android.uid.system`。
 
 #### E-009
 
 - 标题：EAS Core 的公开 Binder 服务仍执行包名、PID/UID、license operation 和应用签名授权。
 - 来源类型：decompiled APK。
-- 来源：[`f.java`](../../backups/headunit_followup_20260827_121919/analysis/decompiled/XSFEASCoreService/sources/com/ecarx/sdk/openapi/b/f.java) 和 [`e.java`](../../backups/headunit_followup_20260827_121919/analysis/decompiled/XSFEASCoreService/sources/com/ecarx/sdk/openapi/b/e.java)。
+- 来源：反编译的 `f.java` 和 `e.java`（私有本地采集归档，未提交）。
 - 关键观察：`getService()` 调用 `checkPermissionNotThrow()`；授权列表来自应用 `assets/license.txt` 或应用商店 license provider，并校验目标应用签名。
 
 #### E-010
 
 - 标题：当前 user build 禁止通过 `cmd car_service` 直接读取属性值。
 - 来源类型：runtime command failure。
-- 来源：[`car_service_get_engine_rpm.txt`](../../backups/headunit_followup_20260827_121919/car/car_service_get_engine_rpm.txt)。
+- 来源：`car_service_get_engine_rpm.txt`（私有本地采集归档，未提交）。
 - 关键观察：只读命令 `get-property-value 291504901 0` 返回 `SecurityException: requires non-user build`。
 - 影响：普通身份的标准属性运行值必须由 APK 内 Car API 诊断记录，不能由 shell 命令替代。
 
@@ -421,7 +421,7 @@ RPM 主链路完成后，再按使用价值依次调查：
 
 - 标题：目标车机运行时返回的 APVP 转速信号 ID 为 `0x12600597`。
 - 来源类型：runtime log。
-- 来源：[`rpmreader_after_update_logcat_filtered.txt`](../../backups/headunit_followup_20260827_121919/deployment/rpmreader_after_update_logcat_filtered.txt) 和 [`rpm_observations.csv`](../../backups/headunit_followup_20260827_121919/apvp/rpm_observations.csv)。
+- 来源：`rpmreader_after_update_logcat_filtered.txt` 和 `rpm_observations.csv`（私有本地采集归档，未提交）。
 - 关键观察：配置服务返回 transfer `268435456`、`signal_id=308282775 / 0x12600597`、`name=EngNSafeEngN`；应用以同一 ID 调用 `setReady` 和读取，首包响应身份一致，值为 `0.0 rpm`、`mode=0`。
 - 限制：车辆电源状态仍未独立确认，因此该值只标记为 `unconfirmed_power_state`。
 
@@ -429,15 +429,15 @@ RPM 主链路完成后，再按使用价值依次调查：
 
 - 标题：新版诊断 APK 已使用现装版本的同一证书完成保留数据覆盖安装。
 - 来源类型：APK verification and runtime deployment。
-- 来源：[`install_rpmreader_final.txt`](../../backups/headunit_followup_20260827_121919/deployment/install_rpmreader_final.txt)、[`package_after_update.txt`](../../backups/headunit_followup_20260827_121919/deployment/package_after_update.txt) 和 [`activity_after_update.txt`](../../backups/headunit_followup_20260827_121919/deployment/activity_after_update.txt)。
-- 关键观察：签名证书 SHA-256 为 `6f3e0c7a9dadcb9c27234cd9536f779fe99aeba0fef20c9e71253ec561a99dda`；`adb install -r` 返回 `Success`；用户 11 中 RPM Reader 冷启动并保持 resumed。
+- 来源：`install_rpmreader_final.txt`、`package_after_update.txt` 和 `activity_after_update.txt`（私有本地采集归档，未提交）。
+- 关键观察：诊断 APK 与现装版本证书一致；`adb install -r` 返回 `Success`；用户 11 中 RPM Reader 冷启动并保持 resumed。
 - 安全说明：未卸载旧包、未清除应用数据；ADB 在增量安装不被允许后自动回退到流式安装。
 
 #### E-013
 
 - 标题：动态发现的 `0x12600597` 在实车窗口返回连续非零转速并最终回到 0。
 - 来源类型：runtime log and observation summary。
-- 来源：[`rpmreader_nonzero_observation_logcat.txt`](../../backups/headunit_followup_20260827_121919/deployment/rpmreader_nonzero_observation_logcat.txt) 和 [`rpm_window_summary.csv`](../../backups/headunit_followup_20260827_121919/apvp/rpm_window_summary.csv)。
+- 来源：`rpmreader_nonzero_observation_logcat.txt` 和 `rpm_window_summary.csv`（私有本地采集归档，未提交）。
 - 关键观察：20.906 秒窗口中取得 186 个非零样本，范围 `313–1318 rpm`、平均 `1279.58 rpm`、`mode=0`，随后在 `12:53:46.363` 返回 `0.0 rpm`。
 - 状态确认：用户于本轮采集后确认，该窗口对应手动保持怠速并随后停止发动机；未通过 ADB 控制任何车辆执行器。
 
@@ -445,7 +445,7 @@ RPM 主链路完成后，再按使用价值依次调查：
 
 - 标题：普通 APK 连接标准 Car API 成功，但读取 `ENGINE_RPM` 被特权权限拒绝。
 - 来源类型：runtime log。
-- 来源：[`rpmreader_final_logcat_filtered.txt`](../../backups/headunit_followup_20260827_121919/deployment/rpmreader_final_logcat_filtered.txt) 和 [`property_rpm_observations.csv`](../../backups/headunit_followup_20260827_121919/car/property_rpm_observations.csv)。
+- 来源：`rpmreader_final_logcat_filtered.txt` 和 `property_rpm_observations.csv`（私有本地采集归档，未提交）。
 - 关键观察：`CarPropertyManager connected` 后，`getProperty(Float.class, 0x11600305, 0)` 返回 `SecurityException: requires android.car.permission.CAR_ENGINE_DETAILED`；同一启动窗口的 APVP 读取继续正常。
 - 影响：可以把普通 APK 的标准属性结果明确归类为权限拒绝，而不是 0 值或无效状态。
 
@@ -453,14 +453,14 @@ RPM 主链路完成后，再按使用价值依次调查：
 
 - 标题：Flyme Auto 的导出 CarService 不是普通 APK 可用的无权限代理。
 - 来源类型：decompiled system APK。
-- 来源：[`CarService.java`](../../backups/headunit_followup_20260827_121919/analysis/decompiled/AutoCarService/sources/com/flyme/auto/carservice/CarService.java)。
+- 来源：反编译的 `CarService.java`（私有本地采集归档，未提交）。
 - 关键观察：服务虽为 `exported=true`，但 `getPropertyList`、读取、订阅和权限查询等每个 Binder 方法都会先执行 `checkSignatures(Process.myUid(), Binder.getCallingUid())`，签名不一致时抛出 `SecurityException`。
 
 #### E-016
 
 - 标题：车机官方 APVP 客户端也采用信号名称，并对低 16 位 ID 变化提供一定兼容。
 - 来源类型：decompiled cluster APK。
-- 来源：[`APVPSignalManager.java`](../../backups/headunit_followup_20260827_121919/analysis/additional_candidates/ECarXClusterService_decompiled/sources/ecarx/transfer/apvp/APVPSignalManager.java)、[`SignalIdentify.java`](../../backups/headunit_followup_20260827_121919/analysis/additional_candidates/ECarXClusterService_decompiled/sources/ecarx/transfer/base/SignalIdentify.java) 和 [`TransferClient.java`](../../backups/headunit_followup_20260827_121919/analysis/additional_candidates/ECarXClusterService_decompiled/sources/ecarx/transfer/client/TransferClient.java)。
+- 来源：反编译的 `APVPSignalManager.java`、`SignalIdentify.java` 和 `TransferClient.java`（私有本地采集归档，未提交）。
 - 关键观察：生成代码固定声明 `EngNSafeEngN=308282775`，但身份相等与哈希使用名称和 ID 高 16 位；客户端支持指定信号订阅及 `REGISTER_ALL_READABLE_SIGNALS`。
 - 限制：全量订阅会读取大量无关车辆信号，不符合最小采集原则，不作为默认后备。
 
@@ -468,14 +468,14 @@ RPM 主链路完成后，再按使用价值依次调查：
 
 - 标题：厂商 SDK 常量中的第二 RPM 属性未在当前 VHAL 发布。
 - 来源类型：SDK constant and runtime dump comparison。
-- 来源：[`ECarXVehicleProperty.java`](../../backups/headunit_followup_20260827_121919/analysis/additional_candidates/ECarXClusterService_decompiled/sources/vendor/ecarx/xma/automotive/vehicle/V2_0/ECarXVehicleProperty.java) 和 [`dumpsys_car_service.txt`](../../backups/headunit_followup_20260827_121919/car/dumpsys_car_service.txt)。
+- 来源：`ECarXVehicleProperty.java` 和 `dumpsys_car_service.txt`（私有本地采集归档，未提交）。
 - 关键观察：SDK 定义 `SENSOR_TYPE_RPM=559969008 / 0x216072F0`，但当前属性配置不存在该 ID；唯一带 RPM 语义的配置仍为标准 `ENGINE_RPM / 0x11600305`。
 
 #### E-018
 
 - 标题：EAS 导出 ContentProvider 不提供车辆信号。
 - 来源类型：decompiled system APK。
-- 来源：[`OpenAPIContentProvider.java`](../../backups/headunit_followup_20260827_121919/analysis/decompiled/XSFEASCoreService/sources/com/ecarx/sdk/openapi/OpenAPIContentProvider.java)。
+- 来源：反编译的 `OpenAPIContentProvider.java`（私有本地采集归档，未提交）。
 - 关键观察：Provider 只处理 SDK 版本和 core service 版本查询；车辆服务 Binder 仍经过既有 license、UID/包名和签名授权链。
 
 ### Findings
@@ -543,7 +543,7 @@ RPM 主链路完成后，再按使用价值依次调查：
 - 证据：E-015、E-016、E-017、E-018，以及 E-009、E-014。
 - 影响：系统 CarService 代理、EAS Provider、厂商 VHAL 常量和仪表服务均未形成普通 APK 可直接采用的新 RPM 接口。
 - 决策：保持 APVP 动态发现为普通应用主路径；标准 Car API 为权限能力后备；EAS/AdaptAPI 只在取得正式 OEM license/签名授权后加入。
-- 详细比较：[`update_resilient_rpm_paths.md`](../../backups/headunit_followup_20260827_121919/analysis/update_resilient_rpm_paths.md)。
+- 详细比较保存在私有本地采集归档的 `update_resilient_rpm_paths.md` 中，未提交到公共仓库。
 
 ### Path P-001：RPM 数据源决策路径
 
