@@ -1,10 +1,12 @@
 package com.lynk.rpmreader;
 
-import android.app.Activity;
 import android.content.ComponentName;
+import android.content.Context;
 import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.os.RemoteException;
 
 import rikka.shizuku.Shizuku;
@@ -19,8 +21,9 @@ final class ShizukuHudController implements AutoCloseable {
         void onError(String message, Throwable error);
     }
 
-    private final Activity activity;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final Shizuku.UserServiceArgs userServiceArgs;
+    private final boolean permissionRequestsAllowed;
     private Callback pendingCallback;
     private IHudShellService service;
     private boolean binding;
@@ -33,7 +36,7 @@ final class ShizukuHudController implements AutoCloseable {
     private final Shizuku.OnBinderDeadListener binderDeadListener = () -> {
         service = null;
         binding = false;
-        failPending("Shizuku 服务已停止，请重新启动 Shizuku", null);
+        failPending("Shizuku 服务已停止，请检查开机启动器", null);
     };
     private final Shizuku.OnRequestPermissionResultListener permissionResultListener =
             (requestCode, grantResult) -> {
@@ -58,10 +61,14 @@ final class ShizukuHudController implements AutoCloseable {
         }
     };
 
-    ShizukuHudController(Activity activity) {
-        this.activity = activity;
+    ShizukuHudController(Context context) {
+        this(context, true);
+    }
+
+    ShizukuHudController(Context context, boolean permissionRequestsAllowed) {
+        this.permissionRequestsAllowed = permissionRequestsAllowed;
         userServiceArgs = new Shizuku.UserServiceArgs(
-                new ComponentName(activity, HudShellUserService.class))
+                new ComponentName(context, HudShellUserService.class))
                 .daemon(false)
                 .tag("lynk-rpm-hud-shell")
                 .processNameSuffix("hud_shell")
@@ -88,7 +95,7 @@ final class ShizukuHudController implements AutoCloseable {
     private void continueStart() {
         try {
             if (!Shizuku.pingBinder()) {
-                failPending("未检测到 Shizuku 服务，请先安装并通过 ADB 启动 Shizuku", null);
+                failPending("Shizuku 服务未运行，请先启动或安装开机启动器", null);
                 return;
             }
             if (Shizuku.getVersion() < MIN_SHIZUKU_API) {
@@ -97,6 +104,10 @@ final class ShizukuHudController implements AutoCloseable {
             }
             if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
                 bindAndRun();
+                return;
+            }
+            if (!permissionRequestsAllowed) {
+                failPending("Shizuku 权限尚未授予，请打开应用完成一次授权", null);
                 return;
             }
             if (Shizuku.shouldShowRequestPermissionRationale()) {
@@ -140,10 +151,10 @@ final class ShizukuHudController implements AutoCloseable {
                 String output = activeService.startHudActivity(
                         displayId, android.os.Process.myUid() / 100000);
                 int privilegeUid = Shizuku.getUid();
-                activity.runOnUiThread(() -> complete(callback, displayId,
+                mainHandler.post(() -> complete(callback, displayId,
                         privilegeUid, output));
             } catch (RemoteException | RuntimeException error) {
-                activity.runOnUiThread(() -> fail(callback,
+                mainHandler.post(() -> fail(callback,
                         "HUD 启动失败：" + safeMessage(error), error));
             }
         }, "RPM-hud-launch").start();

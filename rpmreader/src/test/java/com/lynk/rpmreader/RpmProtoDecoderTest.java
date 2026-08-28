@@ -33,8 +33,47 @@ public final class RpmProtoDecoderTest {
         keepsInstrumentLocationExclusive();
         findsFlymeAutoHudDisplay();
         rejectsNonHudDisplays();
+        appliesHudGearVisibility();
+        appliesHudAutostartPolicy();
+        rearmsHudRestoreOnlyAfterHudSurfaceLoss();
         validatesStartupAnimationTimeline();
-        System.out.println("RPM logic tests passed: " + passed + "/21");
+        System.out.println("RPM logic tests passed: " + passed + "/24");
+    }
+
+    private void appliesHudGearVisibility() {
+        check(HudGearVisibility.isVisible(8),
+                "HUD RPM is visible in Drive");
+        check(HudGearVisibility.isVisible(1),
+                "HUD RPM is visible in Neutral");
+        check(!HudGearVisibility.isVisible(4), "HUD RPM is hidden in Park");
+        check(!HudGearVisibility.isVisible(2), "HUD RPM is hidden in Reverse");
+        pass();
+    }
+
+    private void appliesHudAutostartPolicy() {
+        check(HudAutostartPolicy.shouldSchedule(RpmDisplayLocation.HUD_LEFT, true),
+                "authorized Shizuku HUD selection restores after boot");
+        check(!HudAutostartPolicy.shouldSchedule(RpmDisplayLocation.HUD_LEFT, false),
+                "boot must not restore before a successful foreground launch");
+        check(!HudAutostartPolicy.shouldSchedule(RpmDisplayLocation.LEFT_SPEED, true),
+                "non-HUD selections do not schedule Shizuku HUD restore");
+        pass();
+    }
+
+    private void rearmsHudRestoreOnlyAfterHudSurfaceLoss() {
+        check(HudAutostartPolicy.shouldRearmAfterSurfaceDestroyed(
+                        RpmDisplayLocation.HUD_LEFT, false, true),
+                "destroyed HUD surface re-arms display discovery");
+        check(!HudAutostartPolicy.shouldRearmAfterSurfaceDestroyed(
+                        RpmDisplayLocation.HUD_LEFT, true, true),
+                "configuration recreation does not start a duplicate HUD job");
+        check(!HudAutostartPolicy.shouldRearmAfterSurfaceDestroyed(
+                        RpmDisplayLocation.HUD_LEFT, false, false),
+                "disabled HUD selection is not restored");
+        check(!HudAutostartPolicy.shouldRearmAfterSurfaceDestroyed(
+                        RpmDisplayLocation.LEFT_SPEED, false, true),
+                "instrument surface loss does not start a HUD job");
+        pass();
     }
 
     private void convertsCarApiFloatRpm() {

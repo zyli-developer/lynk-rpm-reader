@@ -7,6 +7,7 @@ import argparse
 import re
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
@@ -14,6 +15,11 @@ from urllib.parse import unquote
 
 
 MAX_TEXT_BYTES = 2 * 1024 * 1024
+REQUIRED_RELEASE_APP_NAME = "领克转速监视器"
+REQUIRED_RELEASE_APK_PATTERN = (
+    'outputFileName = "领克转速监视器-v${variant.versionName}-release.apk"'
+)
+ANDROID_XML_NAMESPACE = "http://schemas.android.com/apk/res/android"
 
 ALLOWED_BINARY_PATH_PATTERNS: Sequence[re.Pattern[str]] = (
     re.compile(r"^gradle/wrapper/gradle-wrapper\.jar$", re.IGNORECASE),
@@ -184,7 +190,57 @@ def scan_repository(root: Path) -> list[Finding]:
         relative = str(path.relative_to(root)).replace("\\", "/")
         findings.extend(path_findings(relative))
         findings.extend(file_findings(root, path))
+    findings.extend(release_identity_findings(root))
     return sorted(set(findings), key=lambda item: (item.path, item.line or 0, item.reason))
+
+
+def release_identity_findings(root: Path) -> Iterable[Finding]:
+    manifest_relative = "rpmreader/src/main/AndroidManifest.xml"
+    strings_relative = "rpmreader/src/main/res/values/strings.xml"
+    build_relative = "rpmreader/build.gradle"
+    manifest_path = root / manifest_relative
+    strings_path = root / strings_relative
+    build_path = root / build_relative
+
+    try:
+        application = ET.parse(manifest_path).getroot().find("application")
+        label = None if application is None else application.get(
+            f"{{{ANDROID_XML_NAMESPACE}}}label"
+        )
+        if label != "@string/app_name":
+            yield Finding(
+                manifest_relative,
+                None,
+                "release application label must reference @string/app_name",
+            )
+    except (OSError, ET.ParseError):
+        yield Finding(manifest_relative, None, "release Android manifest is missing or invalid")
+
+    try:
+        resources = ET.parse(strings_path).getroot()
+        app_name = next(
+            (item.text for item in resources.findall("string") if item.get("name") == "app_name"),
+            None,
+        )
+        if app_name != REQUIRED_RELEASE_APP_NAME:
+            yield Finding(
+                strings_relative,
+                None,
+                f"release app_name must be {REQUIRED_RELEASE_APP_NAME!r}",
+            )
+    except (OSError, ET.ParseError):
+        yield Finding(strings_relative, None, "release string resources are missing or invalid")
+
+    try:
+        build_text = build_path.read_text(encoding="utf-8")
+        if REQUIRED_RELEASE_APK_PATTERN not in build_text:
+            yield Finding(
+                build_relative,
+                None,
+                "release APK filename rule is missing or incorrect",
+            )
+    except OSError:
+        yield Finding(build_relative, None, "release Gradle configuration is missing")
 
 
 def parse_args() -> argparse.Namespace:

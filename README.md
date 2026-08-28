@@ -20,7 +20,7 @@
 
 LynkRPMReader 在车机横屏上实时显示发动机转速，并提供启动扫表动画。应用优先读取兼容车机提供的本地 APVP 信号，在不可用时依次尝试标准 Android Car API 和可选的 Root Car API 通道。
 
-当前源码包名为 `com.lynk.rpmreader`，版本为 `2.0.1-hud-shizuku`（`versionCode 21`）。
+当前源码包名为 `com.lynk.rpmreader`，版本为 `2.0.2`（`versionCode 22`）。
 
 本项目为非官方社区项目，与领克、吉利、魅族及其关联公司无隶属、授权或背书关系。品牌及产品名称仅用于如实说明已验证的设备兼容性。
 
@@ -47,7 +47,7 @@ LynkRPMReader 在车机横屏上实时显示发动机转速，并提供启动扫
 - 🚀 一次性启动动画与自检扫表
 - 🔌 兼容车机 APVP 本地 gRPC 转速读取
 - 🖥️ 实验性转速位置四选一：关闭、左侧速度区、右侧转速卡片、HUD 左下角
-- 🛣️ HUD 模式仅在 D 挡显示数值，并通过受限的 Shizuku UserService 启动到现有 520×280 HUD 显示器
+- 🛣️ HUD 模式在 D/N 挡显示数值，并启动到现有 520×280 HUD 地图显示器
 - 🚘 标准 Android Automotive `ENGINE_RPM` 后备通道
 - 🔐 可选 Root Car API 后备通道
 - 🧪 JVM 零依赖协议与仪表逻辑测试
@@ -57,7 +57,7 @@ LynkRPMReader 在车机横屏上实时显示发动机转速，并提供启动扫
 
 - Android 9（API 28）或更高版本
 - 兼容的车机本地服务或 Android Automotive 车辆属性权限
-- HUD 模式需要 Shizuku API 12 或更高版本，并由用户在 Shizuku 中明确授权；普通仪表和主界面功能不依赖 Shizuku
+- HUD 模式需要 Shizuku API 12+。Shizuku 会保留应用授权，但以 ADB 模式启动的服务通常会在重启后停止；在已验证的开发车机上，可使用 `tools/shizuku-autostart` 中的一次性安装器注册可撤销的开机服务，由它调用车机上已安装的 Shizuku 官方启动器
 - 可选 Root 后备通道只会连接 `127.0.0.1:38605` 上的本机辅助服务；APK 不会自动申请 Root 权限或启动该服务
 
 普通 Android 手机可以安装和启动，但通常没有车辆数据服务，因此不会显示真实转速。请勿在驾驶过程中安装、调试或操作本应用。
@@ -123,7 +123,8 @@ APVP 兼容层仅连接车机本机回环地址，不连接互联网。实现中
 - 只能在本人所有或获得明确授权的车辆与车机上使用，不得绕过访问控制或获取无权访问的数据。
 - 车机固件升级后，本地接口可能发生变化。
 - Root 辅助服务以更高权限运行，会扩大整体安全风险面；不了解风险时请勿启用。
-- HUD 的 Shizuku UserService 只允许查找 520×280 的 Flyme Auto HUD 并启动本应用的转速 Activity，不向应用暴露任意 shell 命令。
+- HUD 的 Shizuku UserService 只允许查找 520×280 的 Flyme Auto HUD 并启动本应用的转速 Activity，不向应用或外部组件暴露任意 shell 命令。
+- 可选的开机助手属于独立且明确的系统修改，只负责调用已安装的 Shizuku 官方启动器，可使用 `tools/shizuku-autostart/uninstall.ps1` 撤销。转速 APK 仅在显示位置仍选择 HUD 且之前已在前台成功启动过 HUD 时安排恢复。
 - HUD 位置属于实验功能；停车状态下完成授权和显示验证后再使用，若遮挡原车导航或提示内容应立即关闭。
 - 不保证兼容所有车型、地区版本或车机固件。
 - 仓库只包含项目原创代码及按各自许可证使用的第三方依赖，不包含无权分发的第三方内容。

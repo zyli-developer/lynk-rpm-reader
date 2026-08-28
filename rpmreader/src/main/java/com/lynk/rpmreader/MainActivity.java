@@ -31,10 +31,12 @@ import java.util.Date;
 import java.util.Locale;
 
 public final class MainActivity extends Activity implements VehicleRpmClient.Listener {
-    private static final String PREFS = "rpm_secondary_display";
-    private static final String PREF_DISPLAY_ID = "display_id";
-    private static final String PREF_DISPLAY_LOCATION = "display_location";
-    private static final String PREF_ACTIVE_DISPLAY_LOCATION = "active_display_location";
+    private static final String PREFS = HudBootJobService.PREFS;
+    private static final String PREF_DISPLAY_ID = HudBootJobService.PREF_DISPLAY_ID;
+    private static final String PREF_DISPLAY_LOCATION =
+            HudBootJobService.PREF_DISPLAY_LOCATION;
+    private static final String PREF_ACTIVE_DISPLAY_LOCATION =
+            HudBootJobService.PREF_ACTIVE_DISPLAY_LOCATION;
     private static final String EXTRA_START_SECONDARY = "start_secondary";
     private static final int INSTRUMENT_DISPLAY_ID = 10;
     private static final int INSTRUMENT_DISPLAY_WIDTH = 1920;
@@ -253,7 +255,7 @@ public final class MainActivity extends Activity implements VehicleRpmClient.Lis
         displayOffButton = locationButton("关闭");
         displayLeftButton = locationButton("左侧");
         displayRightButton = locationButton("右侧");
-        displayHudButton = locationButton("HUD（D挡）");
+        displayHudButton = locationButton("HUD（D/N挡）");
         displayLocationGroup.addView(displayOffButton,
                 new RadioGroup.LayoutParams(0, dp(54), 0.7f));
         displayLocationGroup.addView(displayLeftButton,
@@ -449,6 +451,7 @@ public final class MainActivity extends Activity implements VehicleRpmClient.Lis
                                 .putString(PREF_ACTIVE_DISPLAY_LOCATION,
                                         location.persistedValue())
                                 .apply();
+                        HudBootJobService.markAutostartReady(MainActivity.this);
                         appendLog("HUD 已启动：displayId=" + displayId
                                 + "，Shizuku UID=" + privilegeUid
                                 + (privilegeUid == 0 ? "（root）" : "（shell）"));
@@ -456,7 +459,9 @@ public final class MainActivity extends Activity implements VehicleRpmClient.Lis
                     }
 
                     @Override public void onError(String message, Throwable error) {
-                        persistSelectedDisplayLocation(RpmDisplayLocation.OFF);
+                        // Keep the user's HUD selection across a transient Shizuku/provider
+                        // startup race. Runtime state is discarded, and the foreground UI or
+                        // the delayed boot job can retry once Shizuku becomes available.
                         clearSecondaryDisplayRuntime();
                         refreshDisplayLocationControls();
                         appendLog(message);

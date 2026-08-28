@@ -12,6 +12,7 @@ final class GearStateClient implements AutoCloseable {
     private static final String TAG = "LynkRpmGear";
     static final int CURRENT_GEAR = 0x11400401;
     static final int GLOBAL_AREA = 0;
+    static final int GEAR_NEUTRAL = 1;
     static final int GEAR_DRIVE = 8;
 
     interface Listener {

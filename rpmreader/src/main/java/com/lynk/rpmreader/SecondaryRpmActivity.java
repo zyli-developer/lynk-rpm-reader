@@ -94,7 +94,15 @@ public final class SecondaryRpmActivity extends Activity
     @Override protected void onDestroy() {
         SecondaryRpmActivity active = activeInstance.get();
         if (active == this) activeInstance.clear();
+        boolean rearmHudRestore = HudAutostartPolicy.shouldRearmAfterSurfaceDestroyed(
+                displayLocation, isChangingConfigurations(),
+                HudBootJobService.shouldRestore(this));
         super.onDestroy();
+        if (rearmHudRestore) {
+            Log.i(TAG, "HUD RPM surface destroyed; scheduling display reacquisition");
+            HudBootJobService.markHudSurfaceInactive(getApplicationContext());
+            HudBootJobService.scheduleAfterHudDisplayLoss(getApplicationContext());
+        }
     }
 
     static boolean isActiveOnDisplay(int displayId, RpmDisplayLocation location) {
@@ -111,7 +119,8 @@ public final class SecondaryRpmActivity extends Activity
     }
 
     private int currentDisplayId() {
-        return getDisplay() == null ? -1 : getDisplay().getDisplayId();
+        android.view.Display display = getWindowManager().getDefaultDisplay();
+        return display == null ? -1 : display.getDisplayId();
     }
 
     private void buildUi() {
@@ -200,7 +209,7 @@ public final class SecondaryRpmActivity extends Activity
     private void applyGearVisibility() {
         if (rpmView == null) return;
         boolean visible = displayLocation != RpmDisplayLocation.HUD_LEFT
-                || currentGear == GearStateClient.GEAR_DRIVE;
+                || HudGearVisibility.isVisible(currentGear);
         rpmView.setVisibility(visible ? View.VISIBLE : View.INVISIBLE);
     }
 
@@ -228,7 +237,7 @@ public final class SecondaryRpmActivity extends Activity
         runOnUiThread(() -> {
             currentGear = gear;
             applyGearVisibility();
-            Log.i(TAG, "HUD RPM visibility=" + (gear == GearStateClient.GEAR_DRIVE)
+            Log.i(TAG, "HUD RPM visibility=" + HudGearVisibility.isVisible(gear)
                     + " for CURRENT_GEAR=" + gear);
         });
     }
