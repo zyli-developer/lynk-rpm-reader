@@ -225,6 +225,14 @@ public final class RpmProtoDecoderTest {
                 "instrument readout rounds to one decimal");
         check("—.- × 1000".equals(RpmDisplayText.unavailable()),
                 "instrument unavailable placeholder");
+        check("0000".equals(RpmDisplayText.hudAvailable(0)),
+                "HUD readout pads zero RPM to four digits");
+        check("0850".equals(RpmDisplayText.hudAvailable(850)),
+                "HUD readout pads RPM below one thousand");
+        check("6500".equals(RpmDisplayText.hudAvailable(6500)),
+                "HUD readout shows direct four-digit RPM");
+        check("----".equals(RpmDisplayText.hudUnavailable()),
+                "HUD unavailable placeholder keeps four-character width");
         pass();
     }
 

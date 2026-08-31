@@ -128,7 +128,7 @@ public final class SecondaryRpmActivity extends Activity
         root.setBackgroundColor(Color.TRANSPARENT);
 
         rpmView = new TextView(this);
-        rpmView.setText(RpmDisplayText.unavailable());
+        rpmView.setText(unavailableText());
         rpmView.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         rpmView.setSingleLine(true);
         rpmView.setBackgroundColor(Color.TRANSPARENT);
@@ -216,7 +216,7 @@ public final class SecondaryRpmActivity extends Activity
     @Override public void onStatus(String status, boolean error) {
         if (!error) return;
         runOnUiThread(() -> {
-            rpmView.setText(RpmDisplayText.unavailable());
+            rpmView.setText(unavailableText());
             rpmView.setTextColor(ERROR_TEXT);
         });
     }
@@ -227,7 +227,7 @@ public final class SecondaryRpmActivity extends Activity
 
     @Override public void onRpm(int rpm, int status) {
         runOnUiThread(() -> {
-            rpmView.setText(RpmDisplayText.available(rpm));
+            rpmView.setText(availableText(rpm));
             rpmView.setTextColor(displayLocation == RpmDisplayLocation.HUD_LEFT
                     ? HUD_TEXT : DAY_TEXT);
         });
@@ -240,6 +240,18 @@ public final class SecondaryRpmActivity extends Activity
             Log.i(TAG, "HUD RPM visibility=" + HudGearVisibility.isVisible(gear)
                     + " for CURRENT_GEAR=" + gear);
         });
+    }
+
+    private String availableText(int rpm) {
+        return displayLocation == RpmDisplayLocation.HUD_LEFT
+                ? RpmDisplayText.hudAvailable(rpm)
+                : RpmDisplayText.available(rpm);
+    }
+
+    private String unavailableText() {
+        return displayLocation == RpmDisplayLocation.HUD_LEFT
+                ? RpmDisplayText.hudUnavailable()
+                : RpmDisplayText.unavailable();
     }
 
     @Override public void onGearReadFailed(Throwable error) {

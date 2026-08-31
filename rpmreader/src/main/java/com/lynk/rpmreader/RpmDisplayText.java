@@ -14,4 +14,13 @@ final class RpmDisplayText {
     static String unavailable() {
         return "—.- × 1000";
     }
+
+    static String hudAvailable(int rpm) {
+        int safeRpm = Math.max(0, Math.min(rpm, RpmGaugeModel.MAX_RPM));
+        return String.format(Locale.ROOT, "%04d", safeRpm);
+    }
+
+    static String hudUnavailable() {
+        return "----";
+    }
 }
