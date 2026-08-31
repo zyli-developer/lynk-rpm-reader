@@ -5,6 +5,7 @@ import android.app.ActivityOptions;
 import android.content.Intent;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
+import android.graphics.Point;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.StateListDrawable;
@@ -30,11 +31,18 @@ import java.util.Date;
 import java.util.Locale;
 
 public final class MainActivity extends Activity implements VehicleRpmClient.Listener {
-    private static final String PREFS = "rpm_secondary_display";
-    private static final String PREF_DISPLAY_ID = "display_id";
-    private static final String PREF_DISPLAY_LOCATION = "display_location";
-    private static final String PREF_ACTIVE_DISPLAY_LOCATION = "active_display_location";
+    private static final String PREFS = HudBootJobService.PREFS;
+    private static final String PREF_DISPLAY_ID = HudBootJobService.PREF_DISPLAY_ID;
+    private static final String PREF_DISPLAY_LOCATION =
+            HudBootJobService.PREF_DISPLAY_LOCATION;
+    private static final String PREF_ACTIVE_DISPLAY_LOCATION =
+            HudBootJobService.PREF_ACTIVE_DISPLAY_LOCATION;
     private static final String EXTRA_START_SECONDARY = "start_secondary";
+    private static final int INSTRUMENT_DISPLAY_ID = 10;
+    private static final int INSTRUMENT_DISPLAY_WIDTH = 1920;
+    private static final int INSTRUMENT_DISPLAY_HEIGHT = 720;
+    private static final int HUD_DISPLAY_WIDTH = 520;
+    private static final int HUD_DISPLAY_HEIGHT = 280;
     private static final int INK = Color.rgb(4, 12, 18);
     private static final int PANEL = Color.rgb(9, 29, 39);
     private static final int MUTED = Color.rgb(126, 151, 164);
@@ -54,7 +62,10 @@ public final class MainActivity extends Activity implements VehicleRpmClient.Lis
     private RadioButton displayOffButton;
     private RadioButton displayLeftButton;
     private RadioButton displayRightButton;
+    private RadioButton displayHudButton;
+    private boolean displayOperationInProgress;
     private EcarxProjectionClient projectionOperation;
+    private ShizukuHudController hudController;
     private boolean suppressLocationCallback;
     private boolean firstLaunch = true;
     private boolean activityStarted;
@@ -62,6 +73,7 @@ public final class MainActivity extends Activity implements VehicleRpmClient.Lis
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         getWindow().setNavigationBarColor(INK);
+        hudController = new ShizukuHudController(this);
         buildUi();
         appendLog("目标信号：EngNSafeEngN / 0x12600596 / 0x12600597");
         appendLog("等待连接车辆 APVP 数据服务");
@@ -78,9 +90,11 @@ public final class MainActivity extends Activity implements VehicleRpmClient.Lis
         refreshDisplayLocationControls();
         displayLocationGroup.post(() -> {
             RpmDisplayLocation location = selectedDisplayLocation();
-            if (projectionOperation == null
+            int displayId = location == RpmDisplayLocation.HUD_LEFT
+                    ? activeSecondaryDisplayId() : INSTRUMENT_DISPLAY_ID;
+            if (!displayOperationInProgress && projectionOperation == null
                     && location.isEnabled()
-                    && activeSecondaryDisplayId() < 0) {
+                    && !SecondaryRpmActivity.isActiveOnDisplay(displayId, location)) {
                 startSecondaryDisplay(location);
             }
         });
@@ -107,6 +121,14 @@ public final class MainActivity extends Activity implements VehicleRpmClient.Lis
         if (gaugeView != null) gaugeView.cancelAnimation();
         disconnect();
         super.onStop();
+    }
+
+    @Override protected void onDestroy() {
+        if (hudController != null) {
+            hudController.close();
+            hudController = null;
+        }
+        super.onDestroy();
     }
 
     private void connect() {
@@ -231,14 +253,17 @@ public final class MainActivity extends Activity implements VehicleRpmClient.Lis
         displayLocationGroup.setBackground(locationBackground);
 
         displayOffButton = locationButton("关闭");
-        displayLeftButton = locationButton("左侧速度区");
-        displayRightButton = locationButton("右侧转速卡片");
+        displayLeftButton = locationButton("左侧");
+        displayRightButton = locationButton("右侧");
+        displayHudButton = locationButton("HUD（D/N挡）");
         displayLocationGroup.addView(displayOffButton,
-                new RadioGroup.LayoutParams(0, dp(54), 0.75f));
+                new RadioGroup.LayoutParams(0, dp(54), 0.7f));
         displayLocationGroup.addView(displayLeftButton,
-                new RadioGroup.LayoutParams(0, dp(54), 1.2f));
+                new RadioGroup.LayoutParams(0, dp(54), 0.85f));
         displayLocationGroup.addView(displayRightButton,
-                new RadioGroup.LayoutParams(0, dp(54), 1.45f));
+                new RadioGroup.LayoutParams(0, dp(54), 0.85f));
+        displayLocationGroup.addView(displayHudButton,
+                new RadioGroup.LayoutParams(0, dp(54), 1.35f));
         displayLocationGroup.setOnCheckedChangeListener((group, checkedId) -> {
             if (suppressLocationCallback) return;
             selectDisplayLocation(locationForCheckedId(checkedId));
@@ -352,7 +377,7 @@ public final class MainActivity extends Activity implements VehicleRpmClient.Lis
     }
 
     private void selectDisplayLocation(RpmDisplayLocation location) {
-        if (projectionOperation != null) {
+        if (displayOperationInProgress || projectionOperation != null) {
             refreshDisplayLocationControls();
             return;
         }
@@ -386,59 +411,62 @@ public final class MainActivity extends Activity implements VehicleRpmClient.Lis
     }
 
     private void startSecondaryDisplay(RpmDisplayLocation location) {
-        if (projectionOperation != null) return;
+        if (displayOperationInProgress || projectionOperation != null) return;
         if (!location.isEnabled()) {
             refreshDisplayLocationControls();
             return;
         }
-        int activeId = activeSecondaryDisplayId();
-        if (activeId >= 0) {
-            launchSecondaryActivity(activeId, location);
+        if (location == RpmDisplayLocation.HUD_LEFT) {
+            startHudDisplay(location);
+            return;
+        }
+        setDisplayLocationControlsEnabled(false);
+        Display display = findInstrumentDisplay();
+        if (display == null) {
+            persistSelectedDisplayLocation(RpmDisplayLocation.OFF);
+            clearSecondaryDisplayRuntime();
+            refreshDisplayLocationControls();
+            appendLog("未找到候选的 1920×720 仪表显示 display 10");
             return;
         }
 
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                .putInt(PREF_DISPLAY_ID, display.getDisplayId())
+                .putString(PREF_ACTIVE_DISPLAY_LOCATION, location.persistedValue())
+                .apply();
+        appendLog("正在将“" + location.displayName()
+                + "”透明数值层启动到候选仪表 display 10");
+        launchSecondaryActivity(display.getDisplayId(), location);
+    }
+
+    private void startHudDisplay(RpmDisplayLocation location) {
         setDisplayLocationControlsEnabled(false);
-        appendLog("正在为“" + location.displayName() + "”请求 Flyme Auto 副屏通道");
-        projectionOperation = EcarxProjectionClient.createDisplay(this,
-                new EcarxProjectionClient.Callback() {
-                    @Override public void onComplete(int displayId) {
-                        projectionOperation = null;
+        appendLog("正在通过 Shizuku 查找 Flyme Auto HUD 显示器");
+        if (hudController == null) hudController = new ShizukuHudController(this);
+        hudController.startHud(new ShizukuHudController.Callback() {
+                    @Override public void onStarted(
+                            int displayId, int privilegeUid, String commandOutput) {
                         getSharedPreferences(PREFS, MODE_PRIVATE).edit()
                                 .putInt(PREF_DISPLAY_ID, displayId)
                                 .putString(PREF_ACTIVE_DISPLAY_LOCATION,
                                         location.persistedValue())
                                 .apply();
-                        waitForProjectionDisplay(displayId, location, 20);
+                        HudBootJobService.markAutostartReady(MainActivity.this);
+                        appendLog("HUD 已启动：displayId=" + displayId
+                                + "，Shizuku UID=" + privilegeUid
+                                + (privilegeUid == 0 ? "（root）" : "（shell）"));
+                        refreshDisplayLocationControls();
                     }
 
                     @Override public void onError(String message, Throwable error) {
-                        projectionOperation = null;
-                        persistSelectedDisplayLocation(RpmDisplayLocation.OFF);
+                        // Keep the user's HUD selection across a transient Shizuku/provider
+                        // startup race. Runtime state is discarded, and the foreground UI or
+                        // the delayed boot job can retry once Shizuku becomes available.
                         clearSecondaryDisplayRuntime();
                         refreshDisplayLocationControls();
-                        appendLog(message + (error == null ? "" : "：" + error.getMessage()));
+                        appendLog(message);
                     }
                 });
-    }
-
-    private void waitForProjectionDisplay(
-            int displayId, RpmDisplayLocation location, int remainingAttempts) {
-        DisplayManager manager = getSystemService(DisplayManager.class);
-        Display display = manager == null ? null : manager.getDisplay(displayId);
-        if (display != null) {
-            launchSecondaryActivity(displayId, location);
-            return;
-        }
-        if (remainingAttempts <= 0) {
-            persistSelectedDisplayLocation(RpmDisplayLocation.OFF);
-            clearSecondaryDisplayRuntime();
-            refreshDisplayLocationControls();
-            appendLog("副屏已创建，但 Android 尚未注册显示 ID " + displayId);
-            return;
-        }
-        displayLocationGroup.postDelayed(
-                () -> waitForProjectionDisplay(displayId, location, remainingAttempts - 1),
-                100L);
     }
 
     private void launchSecondaryActivity(int displayId, RpmDisplayLocation location) {
@@ -465,35 +493,52 @@ public final class MainActivity extends Activity implements VehicleRpmClient.Lis
 
     private void stopSecondaryDisplay(
             Runnable afterStopped, RpmDisplayLocation locationToRestoreOnError) {
-        if (projectionOperation != null) return;
+        if (displayOperationInProgress || projectionOperation != null) return;
+        setDisplayLocationControlsEnabled(false);
+        displayOperationInProgress = true;
+        SecondaryRpmActivity.finishActiveInstance();
         int displayId = activeSecondaryDisplayId();
-        if (displayId < 0) {
+        RpmDisplayLocation activeLocation = activeDisplayLocation();
+        if (displayId >= 0 && activeLocation == RpmDisplayLocation.HUD_LEFT) {
+            // The OEM map owns this private display. Close only our translucent Activity;
+            // do not stop or destroy Flyme Auto's Ex Share Display.
             clearSecondaryDisplayRuntime();
-            afterStopped.run();
+            displayLocationGroup.postDelayed(() -> {
+                displayOperationInProgress = false;
+                afterStopped.run();
+            }, 150L);
             return;
         }
-        setDisplayLocationControlsEnabled(false);
-        projectionOperation = EcarxProjectionClient.stopDisplay(this, displayId,
-                new EcarxProjectionClient.Callback() {
-                    @Override public void onComplete(int ignored) {
-                        projectionOperation = null;
-                        clearSecondaryDisplayRuntime();
-                        afterStopped.run();
-                    }
+        clearSecondaryDisplayRuntime();
+        displayLocationGroup.postDelayed(() -> {
+            displayOperationInProgress = false;
+            afterStopped.run();
+        }, 150L);
+    }
 
-                    @Override public void onError(String message, Throwable error) {
-                        projectionOperation = null;
-                        persistSelectedDisplayLocation(locationToRestoreOnError);
-                        refreshDisplayLocationControls();
-                        appendLog(message + (error == null ? "" : "：" + error.getMessage()));
-                    }
-                });
+    private Display findInstrumentDisplay() {
+        DisplayManager manager = getSystemService(DisplayManager.class);
+        Display display = manager == null ? null : manager.getDisplay(INSTRUMENT_DISPLAY_ID);
+        if (display == null || !display.isValid()) return null;
+
+        Point size = new Point();
+        display.getRealSize(size);
+        if (size.x != INSTRUMENT_DISPLAY_WIDTH || size.y != INSTRUMENT_DISPLAY_HEIGHT) {
+            appendLog("拒绝未知 display 10：实际尺寸 " + size.x + "×" + size.y);
+            return null;
+        }
+        return display;
     }
 
     private int activeSecondaryDisplayId() {
         int displayId = getSharedPreferences(PREFS, MODE_PRIVATE)
                 .getInt(PREF_DISPLAY_ID, -1);
         if (displayId < 0) return -1;
+        if (activeDisplayLocation() == RpmDisplayLocation.HUD_LEFT) {
+            // An ordinary app cannot enumerate a private HUD display, but the
+            // shell-launched Activity can still run there.
+            return displayId;
+        }
         DisplayManager manager = getSystemService(DisplayManager.class);
         if (manager != null && manager.getDisplay(displayId) != null) return displayId;
         clearSecondaryDisplayRuntime();
@@ -532,12 +577,16 @@ public final class MainActivity extends Activity implements VehicleRpmClient.Lis
         if (displayRightButton != null && checkedId == displayRightButton.getId()) {
             return RpmDisplayLocation.RIGHT_CARD;
         }
+        if (displayHudButton != null && checkedId == displayHudButton.getId()) {
+            return RpmDisplayLocation.HUD_LEFT;
+        }
         return RpmDisplayLocation.OFF;
     }
 
     private int checkedIdForLocation(RpmDisplayLocation location) {
         if (location == RpmDisplayLocation.LEFT_SPEED) return displayLeftButton.getId();
         if (location == RpmDisplayLocation.RIGHT_CARD) return displayRightButton.getId();
+        if (location == RpmDisplayLocation.HUD_LEFT) return displayHudButton.getId();
         return displayOffButton.getId();
     }
 
@@ -545,6 +594,7 @@ public final class MainActivity extends Activity implements VehicleRpmClient.Lis
         if (displayOffButton != null) displayOffButton.setEnabled(enabled);
         if (displayLeftButton != null) displayLeftButton.setEnabled(enabled);
         if (displayRightButton != null) displayRightButton.setEnabled(enabled);
+        if (displayHudButton != null) displayHudButton.setEnabled(enabled);
     }
 
     private void refreshDisplayLocationControls() {
@@ -553,7 +603,8 @@ public final class MainActivity extends Activity implements VehicleRpmClient.Lis
         suppressLocationCallback = true;
         displayLocationGroup.check(checkedIdForLocation(location));
         suppressLocationCallback = false;
-        setDisplayLocationControlsEnabled(projectionOperation == null);
+        setDisplayLocationControlsEnabled(!displayOperationInProgress
+                && projectionOperation == null);
     }
 
     @Override public void onStatus(String status, boolean error) {

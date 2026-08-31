@@ -31,8 +31,49 @@ public final class RpmProtoDecoderTest {
         formatsAnimatedGaugeReadouts();
         formatsInstrumentReadout();
         keepsInstrumentLocationExclusive();
+        findsFlymeAutoHudDisplay();
+        rejectsNonHudDisplays();
+        appliesHudGearVisibility();
+        appliesHudAutostartPolicy();
+        rearmsHudRestoreOnlyAfterHudSurfaceLoss();
         validatesStartupAnimationTimeline();
-        System.out.println("RPM logic tests passed: " + passed + "/19");
+        System.out.println("RPM logic tests passed: " + passed + "/24");
+    }
+
+    private void appliesHudGearVisibility() {
+        check(HudGearVisibility.isVisible(8),
+                "HUD RPM is visible in Drive");
+        check(HudGearVisibility.isVisible(1),
+                "HUD RPM is visible in Neutral");
+        check(!HudGearVisibility.isVisible(4), "HUD RPM is hidden in Park");
+        check(!HudGearVisibility.isVisible(2), "HUD RPM is hidden in Reverse");
+        pass();
+    }
+
+    private void appliesHudAutostartPolicy() {
+        check(HudAutostartPolicy.shouldSchedule(RpmDisplayLocation.HUD_LEFT, true),
+                "authorized Shizuku HUD selection restores after boot");
+        check(!HudAutostartPolicy.shouldSchedule(RpmDisplayLocation.HUD_LEFT, false),
+                "boot must not restore before a successful foreground launch");
+        check(!HudAutostartPolicy.shouldSchedule(RpmDisplayLocation.LEFT_SPEED, true),
+                "non-HUD selections do not schedule Shizuku HUD restore");
+        pass();
+    }
+
+    private void rearmsHudRestoreOnlyAfterHudSurfaceLoss() {
+        check(HudAutostartPolicy.shouldRearmAfterSurfaceDestroyed(
+                        RpmDisplayLocation.HUD_LEFT, false, true),
+                "destroyed HUD surface re-arms display discovery");
+        check(!HudAutostartPolicy.shouldRearmAfterSurfaceDestroyed(
+                        RpmDisplayLocation.HUD_LEFT, true, true),
+                "configuration recreation does not start a duplicate HUD job");
+        check(!HudAutostartPolicy.shouldRearmAfterSurfaceDestroyed(
+                        RpmDisplayLocation.HUD_LEFT, false, false),
+                "disabled HUD selection is not restored");
+        check(!HudAutostartPolicy.shouldRearmAfterSurfaceDestroyed(
+                        RpmDisplayLocation.LEFT_SPEED, false, true),
+                "instrument surface loss does not start a HUD job");
+        pass();
     }
 
     private void convertsCarApiFloatRpm() {
@@ -178,12 +219,20 @@ public final class RpmProtoDecoderTest {
     }
 
     private void formatsInstrumentReadout() {
-        check("1.0 × 1000 RPM".equals(RpmDisplayText.available(1000)),
+        check("1.0 × 1000".equals(RpmDisplayText.available(1000)),
                 "instrument readout uses one decimal and x1000 unit");
-        check("0.9 × 1000 RPM".equals(RpmDisplayText.available(850)),
+        check("0.9 × 1000".equals(RpmDisplayText.available(850)),
                 "instrument readout rounds to one decimal");
-        check("—.- × 1000 RPM".equals(RpmDisplayText.unavailable()),
+        check("—.- × 1000".equals(RpmDisplayText.unavailable()),
                 "instrument unavailable placeholder");
+        check("0000".equals(RpmDisplayText.hudAvailable(0)),
+                "HUD readout pads zero RPM to four digits");
+        check("0850".equals(RpmDisplayText.hudAvailable(850)),
+                "HUD readout pads RPM below one thousand");
+        check("6500".equals(RpmDisplayText.hudAvailable(6500)),
+                "HUD readout shows direct four-digit RPM");
+        check("----".equals(RpmDisplayText.hudUnavailable()),
+                "HUD unavailable placeholder keeps four-character width");
         pass();
     }
 
@@ -197,6 +246,25 @@ public final class RpmProtoDecoderTest {
         check(RpmDisplayLocation.fromPersistedValue("left_speed,right_card")
                         == RpmDisplayLocation.OFF,
                 "combined placement is rejected");
+        pass();
+    }
+
+    private void findsFlymeAutoHudDisplay() {
+        String dump = "mBaseDisplayInfo=DisplayInfo{\"Built-in Screen\", displayId 0, "
+                + "real 2560 x 1600}\n"
+                + "mBaseDisplayInfo=DisplayInfo{\"Ex Share Display 5\", displayId 6, "
+                + "FLAG_PRIVATE, real 520 x 280, type VIRTUAL, "
+                + "owner com.ecarx.dfe.service (uid 1000)}";
+        check(HudDisplayParser.findHudDisplayId(dump) == 6,
+                "Flyme Auto private 520x280 HUD display is detected");
+        pass();
+    }
+
+    private void rejectsNonHudDisplays() {
+        String dump = "mBaseDisplayInfo=DisplayInfo{\"Ex Share Display 9\", displayId 10, "
+                + "FLAG_PRIVATE, real 1920 x 720, type VIRTUAL}";
+        check(HudDisplayParser.findHudDisplayId(dump) == -1,
+                "non-HUD Ex Share Display is rejected");
         pass();
     }
 

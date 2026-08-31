@@ -20,7 +20,7 @@
 
 LynkRPMReader displays live engine RPM on a landscape head-unit screen and includes a startup gauge-sweep animation. It first reads the local APVP signal exposed by a compatible head unit, then falls back to the standard Android Car API and the optional Root Car API path when necessary.
 
-The current source uses package name `com.lynk.rpmreader`, version `1.9.1`, and `versionCode 17`.
+The current source uses package name `com.lynk.rpmreader`, version `2.0.2`, and `versionCode 22`.
 
 This is an unofficial community project. It is not affiliated with, authorized by, or endorsed by Lynk & Co, Geely, Meizu, or any of their affiliates. Brand and product names are used solely to identify verified device compatibility.
 
@@ -46,7 +46,8 @@ The app does not depend on a specific CPU. Compatibility depends on vehicle sign
 - 📈 Live landscape RPM gauge
 - 🚀 One-shot startup animation and gauge self-test sweep
 - 🔌 Local APVP gRPC engine-speed reader for compatible head units
-- 🖥️ Experimental mutually exclusive instrument placement: off, left speed area, or right RPM card (vehicle-side region mapping still requires validation)
+- 🖥️ Experimental mutually exclusive placement: off, left speed area, right RPM card, or lower-left HUD
+- 🛣️ HUD mode displays the numeric readout in Drive or Neutral on the existing 520×280 HUD map display
 - 🚘 Standard Android Automotive `ENGINE_RPM` fallback
 - 🔐 Optional Root Car API fallback
 - 🧪 Zero-dependency JVM tests for protocol and gauge logic
@@ -56,6 +57,7 @@ The app does not depend on a specific CPU. Compatibility depends on vehicle sign
 
 - Android 9 (API 28) or later
 - A compatible local vehicle service or permission to access Android Automotive vehicle properties
+- HUD mode requires Shizuku API 12+. A Shizuku permission grant is retained by Shizuku, but a server started in ADB mode normally stops after a reboot. On the validated development head unit, the optional one-time installer in `tools/shizuku-autostart` can register a reversible boot service that launches Shizuku's installed official starter.
 - The optional Root fallback only connects to a local helper at `127.0.0.1:38605`; the APK does not request Root access or start that service automatically
 
 The app can be installed and launched on a regular Android phone, but phones normally lack vehicle data services and therefore cannot display actual engine RPM. Do not install, debug, or operate the app while driving.
@@ -121,6 +123,9 @@ The APVP compatibility layer connects only to loopback addresses on the head uni
 - Use the app only on vehicles and head units that you own or are explicitly authorized to use. Do not bypass access controls or obtain data without authorization.
 - Local interfaces may change after a head-unit firmware update.
 - The Root helper runs with elevated privileges and increases the overall security risk. Do not enable it unless you understand the implications.
+- The HUD Shizuku UserService can only locate the 520×280 Flyme Auto HUD and launch this app's RPM activity; it does not expose arbitrary shell commands to the app or another component.
+- The optional boot helper is a separate, explicit system modification. It only starts the installed official Shizuku starter and can be removed with `tools/shizuku-autostart/uninstall.ps1`. The RPM app schedules HUD restoration only when HUD remains selected and a previous foreground launch succeeded.
+- HUD placement is experimental. Grant access and verify the layout while parked, and disable it immediately if it obscures OEM navigation or safety information.
 - Compatibility with every vehicle, regional variant, or head-unit firmware is not guaranteed.
 - The repository contains original project code and third-party dependencies used under their respective licenses. It does not contain third-party material that the project is not authorized to distribute.
 

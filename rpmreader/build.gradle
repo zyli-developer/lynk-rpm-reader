@@ -10,8 +10,8 @@ android {
         applicationId 'com.lynk.rpmreader'
         minSdk 28
         targetSdk 34
-        versionCode 17
-        versionName '1.9.1'
+        versionCode 22
+        versionName '2.0.2'
     }
 
     buildTypes {
@@ -26,6 +26,10 @@ android {
         targetCompatibility JavaVersion.VERSION_1_8
     }
 
+    buildFeatures {
+        aidl true
+    }
+
     packaging {
         resources {
             excludes += ['META-INF/INDEX.LIST', 'META-INF/io.netty.versions.properties']
@@ -34,9 +38,21 @@ android {
 }
 
 dependencies {
+    def shizukuVersion = '13.1.5'
+    implementation "dev.rikka.shizuku:api:$shizukuVersion"
+    implementation "dev.rikka.shizuku:provider:$shizukuVersion"
+    implementation 'androidx.annotation:annotation:1.8.2'
     implementation platform('io.netty:netty-bom:4.1.136.Final')
     implementation 'io.grpc:grpc-netty:1.80.0'
     implementation 'io.grpc:grpc-stub:1.80.0'
+}
+
+android.applicationVariants.configureEach { variant ->
+    if (variant.buildType.name == 'release') {
+        variant.outputs.configureEach {
+            outputFileName = "领克转速监视器-v${variant.versionName}-release.apk"
+        }
+    }
 }
 
 def rpmLogicTestClasses = layout.buildDirectory.dir('rpm-logic-test/classes')
@@ -48,6 +64,9 @@ tasks.register('compileRpmLogicTest', JavaCompile) {
             'src/main/java/com/lynk/rpmreader/RpmGaugeModel.java',
             'src/main/java/com/lynk/rpmreader/RpmDisplayLocation.java',
             'src/main/java/com/lynk/rpmreader/RpmDisplayText.java',
+            'src/main/java/com/lynk/rpmreader/HudDisplayParser.java',
+            'src/main/java/com/lynk/rpmreader/HudGearVisibility.java',
+            'src/main/java/com/lynk/rpmreader/HudAutostartPolicy.java',
             'src/main/java/com/lynk/rpmreader/StartupMotion.java',
             'src/main/java/com/lynk/rpmreader/CarRpmValue.java',
             'src/test/java/com/lynk/rpmreader/RpmProtoDecoderTest.java')

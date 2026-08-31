@@ -1,4 +1,5 @@
 from pathlib import Path
+from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import Mock
 
@@ -7,6 +8,7 @@ from scripts.public_repo_gate import (
     file_findings,
     markdown_findings,
     path_findings,
+    release_identity_findings,
     text_findings,
 )
 
@@ -92,6 +94,38 @@ class PublicRepoGateTest(unittest.TestCase):
         findings = list(file_findings(root, image))
 
         self.assertEqual([], findings)
+
+    def test_release_identity_requires_the_formal_chinese_name(self):
+        with TemporaryDirectory(dir=Path.cwd()) as temporary_directory:
+            root = Path(temporary_directory)
+            manifest = root / "rpmreader/src/main/AndroidManifest.xml"
+            strings = root / "rpmreader/src/main/res/values/strings.xml"
+            build = root / "rpmreader/build.gradle"
+            manifest.parent.mkdir(parents=True)
+            strings.parent.mkdir(parents=True)
+            manifest.write_text(
+                '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
+                '<application android:label="@string/app_name" /></manifest>',
+                encoding="utf-8",
+            )
+            strings.write_text(
+                '<resources><string name="app_name">领克转速监视器</string></resources>',
+                encoding="utf-8",
+            )
+            build.write_text(
+                'outputFileName = "领克转速监视器-v${variant.versionName}-release.apk"',
+                encoding="utf-8",
+            )
+
+            self.assertEqual([], list(release_identity_findings(root)))
+
+            strings.write_text(
+                '<resources><string name="app_name">LynkRPMReader</string></resources>',
+                encoding="utf-8",
+            )
+            findings = list(release_identity_findings(root))
+            self.assertEqual(1, len(findings))
+            self.assertIn("release app_name", findings[0].reason)
 
 
 if __name__ == "__main__":
