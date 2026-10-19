@@ -10,7 +10,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /** Reads the standard AAOS ENGINE_RPM property through CarPropertyManager. */
 final class CarApiRpmClient implements AutoCloseable {
     private static final String TAG = "RpmReader";
-    static final int ENGINE_RPM = 0x11600305;
+    static final int ENGINE_RPM = RpmPropertySource.STANDARD_ENGINE_RPM;
     static final int GLOBAL_AREA = 0;
 
     interface FailureCallback {
@@ -58,16 +58,19 @@ final class CarApiRpmClient implements AutoCloseable {
             Class<?> valueClass = Class.forName("android.car.hardware.CarPropertyValue");
             Method getValue = valueClass.getMethod("getValue");
             Method getStatus = valueClass.getMethod("getStatus");
+            RpmPropertySource source = RpmPropertySource.findReadable(
+                    propertyManager, getProperty);
 
             listener.onLog("Android Car API 已连接");
-            listener.onLog("ENGINE_RPM=291504901 (0x11600305), area=0, Float, 10Hz");
+            listener.onLog(source.name + "=" + source.id + ", area=0, 10Hz");
             listener.onStatus("正在读取发动机转速", false);
-            Log.i(TAG, "CarPropertyManager connected; reading ENGINE_RPM 0x11600305");
+            Log.i(TAG, "CarPropertyManager connected; reading " + source.name
+                    + " 0x" + Integer.toHexString(source.id));
 
             int lastLoggedRpm = Integer.MIN_VALUE;
             while (!closed.get()) {
                 Object propertyValue = getProperty.invoke(
-                        propertyManager, Float.class, ENGINE_RPM, GLOBAL_AREA);
+                        propertyManager, source.valueType, source.id, GLOBAL_AREA);
                 if (propertyValue != null) {
                     int rpm = CarRpmValue.toDisplayRpm(getValue.invoke(propertyValue));
                     int status = ((Number) getStatus.invoke(propertyValue)).intValue();

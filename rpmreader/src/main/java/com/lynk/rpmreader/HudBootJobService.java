@@ -29,7 +29,7 @@ public final class HudBootJobService extends JobService {
     static final String PREF_HUD_AUTOSTART_READY = "hud_autostart_ready";
 
     private final Handler retryHandler = new Handler(Looper.getMainLooper());
-    private volatile ShizukuHudController controller;
+    private volatile HudLaunchCoordinator controller;
     private JobParameters activeParams;
 
     private final Runnable retryRunnable = () -> {
@@ -101,12 +101,11 @@ public final class HudBootJobService extends JobService {
         }
 
         closeController();
-        // A background boot job must never present a permission prompt. The foreground
-        // HUD launch marks this path ready only after Shizuku permission already exists.
-        controller = new ShizukuHudController(this, false);
-        controller.startHud(new ShizukuHudController.Callback() {
+        // A background boot job must never present a permission prompt.
+        controller = new HudLaunchCoordinator(this, false);
+        controller.startHud(new HudLaunchCoordinator.Callback() {
             @Override public void onStarted(
-                    int displayId, int privilegeUid, String commandOutput) {
+                    int displayId, int privilegeUid, String source) {
                 if (activeParams != params) return;
                 getSharedPreferences(PREFS, MODE_PRIVATE).edit()
                         .putInt(PREF_DISPLAY_ID, displayId)
@@ -114,7 +113,7 @@ public final class HudBootJobService extends JobService {
                                 RpmDisplayLocation.HUD_LEFT.persistedValue())
                         .apply();
                 Log.i(TAG, "HUD restored after boot on display " + displayId
-                        + " with Shizuku UID " + privilegeUid);
+                        + " with " + source + " UID " + privilegeUid);
                 finish(params);
             }
 
@@ -124,7 +123,9 @@ public final class HudBootJobService extends JobService {
                 Log.e(TAG, "HUD boot restore failed; retry=" + retry
                         + ", reason=" + message, error);
                 closeController();
-                if (retry) {
+                boolean waitingForDisplay = message.contains("HUD display unavailable")
+                        || message.contains("未找到 Flyme Auto");
+                if (retry && waitingForDisplay) {
                     // Flyme Auto creates its private 520x280 HUD display only after the
                     // vehicle enters D/N. Keep this job alive and poll at a fixed cadence;
                     // JobScheduler's linear backoff otherwise grows to several minutes
@@ -134,7 +135,9 @@ public final class HudBootJobService extends JobService {
                     Log.i(TAG, "HUD discovery retry scheduled in "
                             + HUD_DISCOVERY_RETRY_MS + " ms");
                 } else {
-                    finish(params, false);
+                    // Missing shell authorization needs a new external ADB/Shizuku
+                    // startup. Let JobScheduler back off instead of polling every 5s.
+                    finish(params, retry);
                 }
             }
         });
@@ -160,7 +163,7 @@ public final class HudBootJobService extends JobService {
     }
 
     private void closeController() {
-        ShizukuHudController active = controller;
+        HudLaunchCoordinator active = controller;
         controller = null;
         if (active != null) active.close();
     }
