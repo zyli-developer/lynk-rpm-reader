@@ -65,7 +65,7 @@ public final class MainActivity extends Activity implements VehicleRpmClient.Lis
     private RadioButton displayHudButton;
     private boolean displayOperationInProgress;
     private EcarxProjectionClient projectionOperation;
-    private ShizukuHudController hudController;
+    private HudLaunchCoordinator hudController;
     private boolean suppressLocationCallback;
     private boolean firstLaunch = true;
     private boolean activityStarted;
@@ -73,7 +73,7 @@ public final class MainActivity extends Activity implements VehicleRpmClient.Lis
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         getWindow().setNavigationBarColor(INK);
-        hudController = new ShizukuHudController(this);
+        hudController = new HudLaunchCoordinator(this, true);
         buildUi();
         appendLog("目标信号：EngNSafeEngN / 0x12600596 / 0x12600597");
         appendLog("等待连接车辆 APVP 数据服务");
@@ -441,11 +441,11 @@ public final class MainActivity extends Activity implements VehicleRpmClient.Lis
 
     private void startHudDisplay(RpmDisplayLocation location) {
         setDisplayLocationControlsEnabled(false);
-        appendLog("正在通过 Shizuku 查找 Flyme Auto HUD 显示器");
-        if (hudController == null) hudController = new ShizukuHudController(this);
-        hudController.startHud(new ShizukuHudController.Callback() {
+        appendLog("正在通过内置 shell 服务或 Shizuku 查找 Flyme Auto HUD 显示器");
+        if (hudController == null) hudController = new HudLaunchCoordinator(this, true);
+        hudController.startHud(new HudLaunchCoordinator.Callback() {
                     @Override public void onStarted(
-                            int displayId, int privilegeUid, String commandOutput) {
+                            int displayId, int privilegeUid, String source) {
                         getSharedPreferences(PREFS, MODE_PRIVATE).edit()
                                 .putInt(PREF_DISPLAY_ID, displayId)
                                 .putString(PREF_ACTIVE_DISPLAY_LOCATION,
@@ -453,7 +453,7 @@ public final class MainActivity extends Activity implements VehicleRpmClient.Lis
                                 .apply();
                         HudBootJobService.markAutostartReady(MainActivity.this);
                         appendLog("HUD 已启动：displayId=" + displayId
-                                + "，Shizuku UID=" + privilegeUid
+                                + "，" + source + " UID=" + privilegeUid
                                 + (privilegeUid == 0 ? "（root）" : "（shell）"));
                         refreshDisplayLocationControls();
                     }

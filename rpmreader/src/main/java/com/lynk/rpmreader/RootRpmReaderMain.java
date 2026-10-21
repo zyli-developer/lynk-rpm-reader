@@ -49,18 +49,27 @@ public final class RootRpmReaderMain {
             Class<?> valueClass = Class.forName("android.car.hardware.CarPropertyValue");
             Method getValue = valueClass.getMethod("getValue");
             Method getStatus = valueClass.getMethod("getStatus");
+            RpmPropertySource source = RpmPropertySource.findReadable(
+                    propertyManager, getProperty, getValue, getStatus);
+            System.out.println("SOURCE|" + source.name + "|" + source.id);
             if (args.length > 0 && "serve".equals(args[0])) {
                 AtomicReference<RpmSample> callbackSample = new AtomicReference<>();
-                Object callback = registerRpmCallback(propertyManager, valueClass,
-                        getValue, getStatus, callbackSample);
+                Object callback = null;
+                try {
+                    callback = registerRpmCallback(propertyManager, valueClass,
+                            getValue, getStatus, callbackSample, source);
+                } catch (Exception subscriptionError) {
+                    System.err.println("RPM callback unavailable; polling " + source.name
+                            + ": " + subscriptionError);
+                }
                 serve(propertyManager, getProperty, getValue, getStatus,
-                        callbackSample, callback);
+                        callbackSample, callback, source);
                 return;
             }
             boolean stream = args.length > 0 && "stream".equals(args[0]);
             do {
-                Object propertyValue = getProperty.invoke(propertyManager, Float.class,
-                        CarApiRpmClient.ENGINE_RPM, CarApiRpmClient.GLOBAL_AREA);
+                Object propertyValue = getProperty.invoke(propertyManager, source.valueType,
+                        source.id, CarApiRpmClient.GLOBAL_AREA);
                 Object value = getValue.invoke(propertyValue);
                 int status = ((Number) getStatus.invoke(propertyValue)).intValue();
                 System.out.println("RPM|" + ((Number) value).floatValue() + "|" + status);
@@ -91,7 +100,7 @@ public final class RootRpmReaderMain {
 
     private static void serve(Object propertyManager, Method getProperty,
             Method getValue, Method getStatus, AtomicReference<RpmSample> callbackSample,
-            Object callbackToKeepAlive) throws Exception {
+            Object callbackToKeepAlive, RpmPropertySource source) throws Exception {
         ServerSocket server = new ServerSocket();
         server.setReuseAddress(true);
         server.bind(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), SERVER_PORT));
@@ -99,11 +108,14 @@ public final class RootRpmReaderMain {
             try (Socket client = server.accept();
                  BufferedWriter writer = new BufferedWriter(
                          new OutputStreamWriter(client.getOutputStream()))) {
+                writer.write("SOURCE|" + source.name + "|" + source.id);
+                writer.newLine();
+                writer.flush();
                 while (!client.isClosed()) {
                     RpmSample sample = callbackSample.get();
                     if (sample == null) {
-                        Object propertyValue = getProperty.invoke(propertyManager, Float.class,
-                                CarApiRpmClient.ENGINE_RPM, CarApiRpmClient.GLOBAL_AREA);
+                        Object propertyValue = getProperty.invoke(propertyManager,
+                                source.valueType, source.id, CarApiRpmClient.GLOBAL_AREA);
                         Object value = getValue.invoke(propertyValue);
                         int status = ((Number) getStatus.invoke(propertyValue)).intValue();
                         sample = new RpmSample(((Number) value).floatValue(), status);
@@ -120,7 +132,8 @@ public final class RootRpmReaderMain {
     }
 
     private static Object registerRpmCallback(Object propertyManager, Class<?> valueClass,
-            Method getValue, Method getStatus, AtomicReference<RpmSample> sample)
+            Method getValue, Method getStatus, AtomicReference<RpmSample> sample,
+            RpmPropertySource source)
             throws Exception {
         Class<?> callbackClass = Class.forName(
                 "android.car.hardware.property.CarPropertyManager$CarPropertyEventCallback");
@@ -139,7 +152,7 @@ public final class RootRpmReaderMain {
                     if ("onChangeEvent".equals(method.getName()) && args != null
                             && args.length > 0 && args[0] != null) {
                         int propertyId = ((Number) getPropertyId.invoke(args[0])).intValue();
-                        if (propertyId == CarApiRpmClient.ENGINE_RPM) {
+                        if (propertyId == source.id) {
                             Object value = getValue.invoke(args[0]);
                             int status = ((Number) getStatus.invoke(args[0])).intValue();
                             sample.set(new RpmSample(((Number) value).floatValue(), status));
@@ -150,7 +163,7 @@ public final class RootRpmReaderMain {
         Method register = propertyManager.getClass().getMethod("registerCallback",
                 callbackClass, int.class, float.class);
         Object result = register.invoke(propertyManager, callback,
-                CarApiRpmClient.ENGINE_RPM, 10.0f);
+                source.id, 10.0f);
         if (result instanceof Boolean && !((Boolean) result)) {
             throw new IllegalStateException("ENGINE_RPM callback registration rejected");
         }
