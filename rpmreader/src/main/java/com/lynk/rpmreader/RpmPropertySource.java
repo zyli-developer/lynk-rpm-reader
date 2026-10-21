@@ -17,14 +17,18 @@ final class RpmPropertySource {
         this.name = name;
     }
 
-    static RpmPropertySource findReadable(Object manager, Method getProperty) throws Exception {
+    static RpmPropertySource findReadable(Object manager, Method getProperty,
+            Method getValue, Method getStatus) throws Exception {
         Exception lastError = null;
         for (RpmPropertySource source : new RpmPropertySource[] {
                 new RpmPropertySource(STANDARD_ENGINE_RPM, Float.class, "ENGINE_RPM"),
                 new RpmPropertySource(LYNK_E245_ENGINE_RPM, Integer.class,
                         "Lynk E245 vendor RPM")}) {
             try {
-                if (getProperty.invoke(manager, source.valueType, source.id, 0) != null) {
+                Object property = getProperty.invoke(manager, source.valueType, source.id, 0);
+                if (property != null
+                        && ((Number) getStatus.invoke(property)).intValue() == 0
+                        && getValue.invoke(property) instanceof Number) {
                     return source;
                 }
             } catch (Exception error) {

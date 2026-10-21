@@ -27,7 +27,9 @@ final class HudLaunchCoordinator implements AutoCloseable {
 
             @Override public void onUnavailable(String reason) {
                 if (closed) return;
-                shizuku = new ShizukuHudController(context, permissionRequestsAllowed);
+                if (shizuku == null) {
+                    shizuku = new ShizukuHudController(context, permissionRequestsAllowed);
+                }
                 shizuku.startHud(new ShizukuHudController.Callback() {
                     @Override public void onStarted(int displayId, int privilegeUid,
                             String output) {

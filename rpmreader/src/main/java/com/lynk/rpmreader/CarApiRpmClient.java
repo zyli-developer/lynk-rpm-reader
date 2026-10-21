@@ -59,7 +59,7 @@ final class CarApiRpmClient implements AutoCloseable {
             Method getValue = valueClass.getMethod("getValue");
             Method getStatus = valueClass.getMethod("getStatus");
             RpmPropertySource source = RpmPropertySource.findReadable(
-                    propertyManager, getProperty);
+                    propertyManager, getProperty, getValue, getStatus);
 
             listener.onLog("Android Car API 已连接");
             listener.onLog(source.name + "=" + source.id + ", area=0, 10Hz");

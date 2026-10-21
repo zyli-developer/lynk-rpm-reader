@@ -50,7 +50,7 @@ public final class RootRpmReaderMain {
             Method getValue = valueClass.getMethod("getValue");
             Method getStatus = valueClass.getMethod("getStatus");
             RpmPropertySource source = RpmPropertySource.findReadable(
-                    propertyManager, getProperty);
+                    propertyManager, getProperty, getValue, getStatus);
             System.out.println("SOURCE|" + source.name + "|" + source.id);
             if (args.length > 0 && "serve".equals(args[0])) {
                 AtomicReference<RpmSample> callbackSample = new AtomicReference<>();

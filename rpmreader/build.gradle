@@ -69,6 +69,7 @@ tasks.register('compileRpmLogicTest', JavaCompile) {
             'src/main/java/com/lynk/rpmreader/HudAutostartPolicy.java',
             'src/main/java/com/lynk/rpmreader/StartupMotion.java',
             'src/main/java/com/lynk/rpmreader/CarRpmValue.java',
+            'src/main/java/com/lynk/rpmreader/RpmPropertySource.java',
             'src/test/java/com/lynk/rpmreader/RpmProtoDecoderTest.java')
     classpath = files()
     destinationDirectory = rpmLogicTestClasses
