@@ -30,6 +30,8 @@ jobs:
           java-version: '17'
           cache: gradle
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
       - name: Test and build
         run: ./gradlew :rpmreader:rpmLogicTest :rpmreader:assembleDebug --no-daemon
       - name: Upload debug APK
