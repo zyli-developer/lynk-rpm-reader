@@ -4,6 +4,7 @@ import android.content.Context;
 import android.net.Credentials;
 import android.net.LocalServerSocket;
 import android.net.LocalSocket;
+import android.os.Looper;
 import android.os.Process;
 
 import java.io.DataInputStream;
@@ -26,6 +27,9 @@ public final class EmbeddedHudShellMain {
         int helperUid = Process.myUid();
         if (helperUid != 0 && helperUid != 2000) {
             throw new SecurityException("HUD helper requires root or ADB shell UID");
+        }
+        if (Looper.myLooper() == null) {
+            Looper.prepareMainLooper();
         }
         Class<?> threadClass = Class.forName("android.app.ActivityThread");
         Object thread = threadClass.getMethod("systemMain").invoke(null);
