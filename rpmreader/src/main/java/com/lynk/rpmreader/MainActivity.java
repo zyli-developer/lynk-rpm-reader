@@ -55,6 +55,7 @@ public final class MainActivity extends Activity implements VehicleRpmClient.Lis
     private TextView statusView;
     private TextView rawView;
     private TextView logView;
+    private ScrollView logScroll;
     private View statusDot;
     private VehicleRpmClient client;
     private StartupOverlayView startupOverlay;
@@ -225,10 +226,10 @@ public final class MainActivity extends Activity implements VehicleRpmClient.Lis
         logView.setTypeface(Typeface.MONOSPACE);
         logView.setLineSpacing(dp(4), 1f);
         logView.setMovementMethod(new ScrollingMovementMethod());
-        ScrollView scroll = new ScrollView(this);
-        scroll.setVerticalScrollBarEnabled(false);
-        scroll.addView(logView);
-        panel.addView(scroll, new LinearLayout.LayoutParams(-1, dp(180)));
+        logScroll = new ScrollView(this);
+        logScroll.setVerticalScrollBarEnabled(false);
+        logScroll.addView(logView);
+        panel.addView(logScroll, new LinearLayout.LayoutParams(-1, dp(180)));
         panelScroll.addView(panel, new ScrollView.LayoutParams(-1, -2));
         root.addView(panelScroll, new LinearLayout.LayoutParams(0, -1, 1f));
         shell.addView(root, new FrameLayout.LayoutParams(-1, -1));
@@ -626,13 +627,18 @@ public final class MainActivity extends Activity implements VehicleRpmClient.Lis
         if (logView == null) return;
         String line = timeFormat.format(new Date()) + "  " + message;
         CharSequence old = logView.getText();
-        String combined = old.length() == 0 ? line : old + "\n" + line;
-        if (combined.length() > 8000) combined = combined.substring(combined.length() - 6500);
+        // Newest message first: prepend, and keep the newest part when trimming.
+        String combined = old.length() == 0 ? line : line + "\n" + old;
+        if (combined.length() > 8000) {
+            int end = 6500;
+            int lastNewline = combined.lastIndexOf('\n', end);
+            if (lastNewline > 0) end = lastNewline;
+            combined = combined.substring(0, end);
+        }
         logView.setText(combined);
-        logView.post(() -> {
-            int offset = logView.getLineCount() * logView.getLineHeight() - logView.getHeight();
-            logView.scrollTo(0, Math.max(offset, 0));
-        });
+        if (logScroll != null) {
+            logScroll.post(() -> logScroll.scrollTo(0, 0));
+        }
     }
 
     private int dp(int value) {
