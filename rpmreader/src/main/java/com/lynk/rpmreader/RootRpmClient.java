@@ -69,6 +69,8 @@ final class RootRpmClient implements AutoCloseable {
                         }
                     } else if (line.startsWith("ERROR|")) {
                         throw new IllegalStateException(line);
+                    } else if (line.startsWith("SOURCE|")) {
+                        listener.onLog("Root 车辆属性：" + line.substring("SOURCE|".length()));
                     } else if (diagnosticLines++ < 3) {
                         Log.d(TAG, "root-helper: " + line);
                     }

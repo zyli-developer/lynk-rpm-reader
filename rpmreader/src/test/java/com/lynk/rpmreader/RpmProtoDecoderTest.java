@@ -15,6 +15,7 @@ public final class RpmProtoDecoderTest {
     private void run() throws Exception {
         convertsCarApiFloatRpm();
         rejectsInvalidCarApiRpm();
+        fallsBackWhenStandardCarPropertyUnavailable();
         encodesApvpSignalIdentity();
         decodesApvpUnpackedFloat();
         acceptsFlymeAuto25SignalIdentity();
@@ -37,7 +38,7 @@ public final class RpmProtoDecoderTest {
         appliesHudAutostartPolicy();
         rearmsHudRestoreOnlyAfterHudSurfaceLoss();
         validatesStartupAnimationTimeline();
-        System.out.println("RPM logic tests passed: " + passed + "/24");
+        System.out.println("RPM logic tests passed: " + passed + "/25");
     }
 
     private void appliesHudGearVisibility() {
@@ -88,6 +89,40 @@ public final class RpmProtoDecoderTest {
             CarRpmValue.toDisplayRpm(Float.NaN);
             throw new AssertionError("NaN RPM must fail");
         } catch (IllegalArgumentException expected) { pass(); }
+    }
+
+    private void fallsBackWhenStandardCarPropertyUnavailable() throws Exception {
+        FakePropertyManager manager = new FakePropertyManager();
+        RpmPropertySource source = RpmPropertySource.findReadable(manager,
+                FakePropertyManager.class.getMethod("getProperty", Class.class,
+                        int.class, int.class),
+                FakePropertyValue.class.getMethod("getValue"),
+                FakePropertyValue.class.getMethod("getStatus"));
+        check(source.id == RpmPropertySource.LYNK_E245_ENGINE_RPM,
+                "available vendor RPM is selected when standard RPM is unavailable");
+        pass();
+    }
+
+    public static final class FakePropertyManager {
+        public FakePropertyValue getProperty(Class<?> valueType, int propertyId, int area) {
+            if (propertyId == RpmPropertySource.STANDARD_ENGINE_RPM) {
+                return new FakePropertyValue(1200f, 1);
+            }
+            return new FakePropertyValue(1300, 0);
+        }
+    }
+
+    public static final class FakePropertyValue {
+        private final Object value;
+        private final int status;
+
+        FakePropertyValue(Object value, int status) {
+            this.value = value;
+            this.status = status;
+        }
+
+        public Object getValue() { return value; }
+        public int getStatus() { return status; }
     }
 
     private void encodesApvpSignalIdentity() throws Exception {

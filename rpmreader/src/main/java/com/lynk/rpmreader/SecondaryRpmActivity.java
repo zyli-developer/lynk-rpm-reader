@@ -150,6 +150,7 @@ public final class SecondaryRpmActivity extends Activity
             // Keep the OEM D indicator, map and central navigation arrow unobstructed.
             params = new FrameLayout.LayoutParams(
                     Math.round(width * 0.42f), Math.round(height * 0.18f));
+            params.gravity = Gravity.LEFT | Gravity.TOP;
             params.leftMargin = Math.round(width * 0.06f);
             params.topMargin = Math.round(height * 0.75f);
         } else if (displayLocation == RpmDisplayLocation.LEFT_SPEED) {
@@ -196,7 +197,8 @@ public final class SecondaryRpmActivity extends Activity
         if (displayLocation == RpmDisplayLocation.HUD_LEFT) {
             rpmView.setTextSize(27);
             rpmView.setTextColor(HUD_TEXT);
-            rpmView.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+            rpmView.setLayoutDirection(View.LAYOUT_DIRECTION_LTR);
+            rpmView.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
             rpmView.setShadowLayer(4f, 0f, 2f, Color.BLACK);
         } else {
             rpmView.setTextSize(displayLocation == RpmDisplayLocation.LEFT_SPEED ? 23 : 31);

@@ -1,0 +1,9 @@
+service lynk_rpm_hud_helper /system/bin/sh /data/local/lynk-rpm-hud-helper-start.sh
+    class late_start
+    user shell
+    group shell log readproc
+    disabled
+    seclabel u:r:shell:s0
+
+on property:sys.boot_completed=1
+    start lynk_rpm_hud_helper
