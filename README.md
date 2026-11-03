@@ -20,7 +20,7 @@
 
 LynkRPMReader 在车机横屏上实时显示发动机转速，并提供启动扫表动画。应用优先读取兼容车机提供的本地 APVP 信号，在不可用时依次尝试标准 Android Car API 和可选的 Root Car API 通道。
 
-当前源码包名为 `com.lynk.rpmreader`，版本为 `2.0.4`（`versionCode 24`）。
+当前源码包名为 `com.lynk.rpmreader`，版本为 `2.0.5`（`versionCode 25`）。
 
 本项目为非官方社区项目，与领克、吉利、魅族及其关联公司无隶属、授权或背书关系。品牌及产品名称仅用于如实说明已验证的设备兼容性。
 
@@ -41,6 +41,8 @@ LynkRPMReader 在车机横屏上实时显示发动机转速，并提供启动扫
 
 应用不依赖特定 CPU。兼容性取决于车辆信号、本地服务和系统权限，请勿仅根据座舱芯片判断是否兼容。
 
+HUD 内置 helper 与 init 开机自启动已在 2025 款领克 08 / Flyme Auto 2.5.0 上完成重启验证。
+
 ## ✨ 功能亮点
 
 - 📈 横屏实时转速仪表
@@ -51,13 +53,14 @@ LynkRPMReader 在车机横屏上实时显示发动机转速，并提供启动扫
 - 🚘 Android Automotive 标准 `ENGINE_RPM` 与 E245 vendor 属性 `0x21408066` 后备通道（按实车可读取情况选择）
 - 🔐 可选 Root Car API 后备通道
 - 🧪 JVM 零依赖协议与仪表逻辑测试
+- 📋 诊断记录按最新消息置顶显示
 - 🏠 数据仅在车机本地处理，不连接外部业务服务器
 
 ## 📱 系统要求
 
 - Android 9（API 28）或更高版本
 - 兼容的车机本地服务或 Android Automotive 车辆属性权限
-- HUD 模式可使用 APK 内置 shell 服务，或 Shizuku API 12+。内置服务需要先通过 ADB shell 启动；普通 APK 无法自行获得 shell 权限。车机重启或升级 APK 后需重新启动服务。已有 Shizuku 安装仍可作为后备；其 ADB 模式服务通常也会在重启后停止
+- HUD 模式使用 APK 内置 shell 服务；普通 APK 无法自行获得 shell 权限，需要通过 ADB shell 手动启动一次，或使用 [`tools/helper-autostart`](tools/helper-autostart/README.md) 安装 init 开机自启动服务（需要 Root 且 `/system` 可写）。已安装的 Shizuku 仍作为可选后备。自启动服务会在车机重启后拉起 helper；APK 更新后建议重启一次或手动重启 helper。
 - 可选 Root 后备通道只会连接 `127.0.0.1:38605` 上的本机辅助服务；APK 不会自动申请 Root 权限或启动该服务
 
 普通 Android 手机可以安装和启动，但通常没有车辆数据服务，因此不会显示真实转速。请勿在驾驶过程中安装、调试或操作本应用。
@@ -70,7 +73,15 @@ LynkRPMReader 在车机横屏上实时显示发动机转速，并提供启动扫
 .\scripts\start-embedded-hud.ps1
 ```
 
-脚本从车机上的已安装 APK 启动本项目自带的固定功能 shell 服务。它只接受本应用 UID 的请求，只能查找 520×280 的 `Ex Share Display` 并启动本应用的 HUD Activity；不提供任意命令执行接口。手机或电脑上不必另装 Shizuku APK。车机每次重启及本应用更新后须重新运行脚本；没有 ADB 或 Root 授权时，单靠普通 APK 无法自动恢复 shell 权限。
+脚本从车机上的已安装 APK 启动本项目自带的固定功能 shell 服务。它只接受本应用 UID 的请求，只能查找 520×280 的 `Ex Share Display` 并启动本应用的 HUD Activity；不提供任意命令执行接口。手机或电脑上不必另装 Shizuku APK。
+
+若车机已 Root 且 `/system` 可写，可安装 init 开机自启动服务，使 helper 在重启后自动启动：
+
+```powershell
+.\tools\helper-autostart\install.ps1 -Adb <adb.exe 路径> -Serial <设备序列号>
+```
+
+安装后需完整重启一次，init 才会加载服务；启动脚本会解析当前安装的 APK 路径。APK 更新后建议重启一次，或重新运行 `start-embedded-hud.ps1`。撤销自启动使用 `tools/helper-autostart/uninstall.ps1`。已有 Shizuku 安装仍可作为可选后备。没有 ADB 或 Root 授权时，单靠普通 APK 无法自动恢复 shell 权限。
 
 转速仍优先走已验证的 APVP 通道。EVCC 资料中的 `0x21408066` 是 E245 平台的 Int32 转速属性，本项目仅在标准 `ENGINE_RPM` 读取失败且车机实际返回该属性时使用。25 款领克 08 是否暴露该属性尚未验证。EVCC 的专有 VHAL gRPC 接入依赖其 native 参数与车端服务，本项目没有复用该协议。
 
@@ -135,8 +146,8 @@ APVP 兼容层仅连接车机本机回环地址，不连接互联网。实现中
 - 只能在本人所有或获得明确授权的车辆与车机上使用，不得绕过访问控制或获取无权访问的数据。
 - 车机固件升级后，本地接口可能发生变化。
 - Root 辅助服务以更高权限运行，会扩大整体安全风险面；不了解风险时请勿启用。
-- HUD 的 Shizuku UserService 只允许查找 520×280 的 Flyme Auto HUD 并启动本应用的转速 Activity，不向应用或外部组件暴露任意 shell 命令。
-- 可选的开机助手属于独立且明确的系统修改，只负责调用已安装的 Shizuku 官方启动器，可使用 `tools/shizuku-autostart/uninstall.ps1` 撤销。转速 APK 仅在显示位置仍选择 HUD 且之前已在前台成功启动过 HUD 时安排恢复。
+- HUD 的内置 shell helper（以及可选的 Shizuku UserService）只允许查找 520×280 的 Flyme Auto HUD 并启动本应用的转速 Activity，不向应用或外部组件暴露任意 shell 命令。
+- 可选的开机自启动属于独立且明确的系统修改：`tools/helper-autostart` 以 shell 身份启动 APK 内置 helper，`tools/shizuku-autostart` 则启动已安装的 Shizuku 官方启动器；两者均可通过各自的 `uninstall.ps1` 撤销。转速 APK 仅在显示位置仍选择 HUD 且之前已在前台成功启动过 HUD 时安排恢复。
 - HUD 位置属于实验功能；停车状态下完成授权和显示验证后再使用，若遮挡原车导航或提示内容应立即关闭。
 - 不保证兼容所有车型、地区版本或车机固件。
 - 仓库只包含项目原创代码及按各自许可证使用的第三方依赖，不包含无权分发的第三方内容。
