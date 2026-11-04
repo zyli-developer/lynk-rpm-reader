@@ -20,7 +20,7 @@
 
 LynkRPMReader displays live engine RPM on a landscape head-unit screen and includes a startup gauge-sweep animation. It first reads the local APVP signal exposed by a compatible head unit, then falls back to the standard Android Car API and the optional Root Car API path when necessary.
 
-The current source uses package name `com.lynk.rpmreader`, version `2.0.2`, and `versionCode 22`.
+The current source uses package name `com.lynk.rpmreader`, version `2.0.5`, and `versionCode 25`.
 
 This is an unofficial community project. It is not affiliated with, authorized by, or endorsed by Lynk & Co, Geely, Meizu, or any of their affiliates. Brand and product names are used solely to identify verified device compatibility.
 
@@ -41,6 +41,8 @@ This is an unofficial community project. It is not affiliated with, authorized b
 
 The app does not depend on a specific CPU. Compatibility depends on vehicle signals, local services, and system permissions; do not determine compatibility from the cockpit processor alone.
 
+The built-in HUD helper and its init autostart service have been verified across a reboot on the 2025 Lynk & Co 08 / Flyme Auto 2.5.0 test unit.
+
 ## ✨ Features
 
 - 📈 Live landscape RPM gauge
@@ -48,19 +50,38 @@ The app does not depend on a specific CPU. Compatibility depends on vehicle sign
 - 🔌 Local APVP gRPC engine-speed reader for compatible head units
 - 🖥️ Experimental mutually exclusive placement: off, left speed area, right RPM card, or lower-left HUD
 - 🛣️ HUD mode displays the numeric readout in Drive or Neutral on the existing 520×280 HUD map display
-- 🚘 Standard Android Automotive `ENGINE_RPM` fallback
+- 🚘 Standard Android Automotive `ENGINE_RPM` and E245 vendor property `0x21408066` fallbacks (selected when readable)
 - 🔐 Optional Root Car API fallback
 - 🧪 Zero-dependency JVM tests for protocol and gauge logic
+- 📋 Newest-first diagnosis log
 - 🏠 On-device data processing with no external application server
 
 ## 📱 Requirements
 
 - Android 9 (API 28) or later
 - A compatible local vehicle service or permission to access Android Automotive vehicle properties
-- HUD mode requires Shizuku API 12+. A Shizuku permission grant is retained by Shizuku, but a server started in ADB mode normally stops after a reboot. On the validated development head unit, the optional one-time installer in `tools/shizuku-autostart` can register a reversible boot service that launches Shizuku's installed official starter.
+- HUD mode uses the shell helper packaged in the APK. A normal APK cannot grant itself shell privileges, so the helper must be started once over ADB shell, or registered as an init boot service with [`tools/helper-autostart`](tools/helper-autostart/README.md) (requires root and a writable `/system`). An installed Shizuku remains an optional fallback. The boot service starts the helper after a reboot; after an APK update, reboot once or restart the helper manually.
 - The optional Root fallback only connects to a local helper at `127.0.0.1:38605`; the APK does not request Root access or start that service automatically
 
 The app can be installed and launched on a regular Android phone, but phones normally lack vehicle data services and therefore cannot display actual engine RPM. Do not install, debug, or operate the app while driving.
+
+### Single-APK HUD mode (development head unit)
+
+After installing the APK, with an authorized ADB connection, run:
+
+```powershell
+.\scripts\start-embedded-hud.ps1
+```
+
+The script starts the fixed-function shell helper packaged in the installed APK. It accepts requests only from this app's UID, can only locate the 520×280 `Ex Share Display` and launch this app's HUD activity, and does not expose arbitrary command execution. No separate Shizuku APK is required on the phone or PC.
+
+On a rooted head unit with a writable `/system`, the init boot service can start the helper automatically after a reboot:
+
+```powershell
+.\tools\helper-autostart\install.ps1 -Adb <path-to-adb.exe> -Serial <device-serial>
+```
+
+A full reboot is required before init loads the service; the launcher resolves the currently installed APK path. After an APK update, reboot once or rerun `start-embedded-hud.ps1`. Remove the service with `tools/helper-autostart/uninstall.ps1`. An installed Shizuku remains an optional fallback. Without ADB or root authorization, a normal APK cannot restore shell privileges by itself.
 
 ## 🛠️ Build and test
 
@@ -123,8 +144,8 @@ The APVP compatibility layer connects only to loopback addresses on the head uni
 - Use the app only on vehicles and head units that you own or are explicitly authorized to use. Do not bypass access controls or obtain data without authorization.
 - Local interfaces may change after a head-unit firmware update.
 - The Root helper runs with elevated privileges and increases the overall security risk. Do not enable it unless you understand the implications.
-- The HUD Shizuku UserService can only locate the 520×280 Flyme Auto HUD and launch this app's RPM activity; it does not expose arbitrary shell commands to the app or another component.
-- The optional boot helper is a separate, explicit system modification. It only starts the installed official Shizuku starter and can be removed with `tools/shizuku-autostart/uninstall.ps1`. The RPM app schedules HUD restoration only when HUD remains selected and a previous foreground launch succeeded.
+- The HUD built-in shell helper (and the optional Shizuku UserService) can only locate the 520×280 Flyme Auto HUD and launch this app's RPM activity; it does not expose arbitrary shell commands to the app or another component.
+- The optional boot autostart is a separate, explicit system modification: `tools/helper-autostart` starts the APK-packaged helper as shell, while `tools/shizuku-autostart` starts the installed official Shizuku starter; each can be removed with its own `uninstall.ps1`. The RPM app schedules HUD restoration only when HUD remains selected and a previous foreground launch succeeded.
 - HUD placement is experimental. Grant access and verify the layout while parked, and disable it immediately if it obscures OEM navigation or safety information.
 - Compatibility with every vehicle, regional variant, or head-unit firmware is not guaranteed.
 - The repository contains original project code and third-party dependencies used under their respective licenses. It does not contain third-party material that the project is not authorized to distribute.
